@@ -1,7 +1,6 @@
 import logging
 
 from flask_restx import Resource
-from flask import request
 import datetime
 
 from src.api.nsmodels import event_ns, event_model, event_parser
@@ -32,7 +31,7 @@ class SeismicListAPI(Resource):
         logger.info("Events list success: count=%s", len(events))
         return events
 
-    @event_ns.expect(event_model)
+    @event_ns.expect(event_parser)
     @event_ns.doc(
         security=[{'ApiKeyAuth': []}, {'JsonWebToken': []}],
         description='Create or update a seismic event (requires X-API-Key or JWT Bearer token)',
@@ -72,16 +71,39 @@ class SeismicListAPI(Resource):
         )
         if exist_event:
             # -------- არსებული მოვლენის განახლება --------
-            exist_event.event_id = args.get('event_id')
-            exist_event.origin_time = origin_time
-            exist_event.origin_msec = args.get('origin_msec')
-            exist_event.latitude = args['latitude']
-            exist_event.longitude = args['longitude']
-            exist_event.depth = args['depth']
-            exist_event.location_ge = args.get('location_ge')
-            exist_event.location_en = args.get('location_en')
-            exist_event.area = args.get('area')
-            exist_event.ml = args.get('ml')
+            def has_value(value):
+                return not (value is None or (isinstance(value, str) and value.strip() == ""))
+
+            event_id = args.get('event_id')
+            origin_msec = args.get('origin_msec')
+            latitude = args.get('latitude')
+            longitude = args.get('longitude')
+            depth = args.get('depth')
+            location_ge = args.get('location_ge')
+            location_en = args.get('location_en')
+            area = args.get('area')
+            ml = args.get('ml')
+
+            if has_value(event_id):
+                exist_event.event_id = event_id
+            if has_value(args.get('origin_time')):
+                exist_event.origin_time = origin_time
+            if has_value(origin_msec):
+                exist_event.origin_msec = origin_msec
+            if has_value(latitude):
+                exist_event.latitude = latitude
+            if has_value(longitude):
+                exist_event.longitude = longitude
+            if has_value(depth):
+                exist_event.depth = depth
+            if has_value(location_ge):
+                exist_event.location_ge = location_ge
+            if has_value(location_en):
+                exist_event.location_en = location_en
+            if has_value(area):
+                exist_event.area = area
+            if has_value(ml):
+                exist_event.ml = ml
 
             exist_event.save()
             logger.info("Event updated: seiscomp_oid=%s", seiscomp_oid)
