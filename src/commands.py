@@ -18,7 +18,7 @@ def _is_production_environment():
 def _require_reset_confirmation(confirm_text):
     """init_db-სთვის სავალდებულო დამცავი ტექსტის ვალიდაცია."""
     if confirm_text != "RESET_DB":
-        raise click.ClickException(
+        raise click.ClickException( 
             "უსაფრთხოების მიზნით მიუთითე --confirm-text RESET_DB"
         )
 
@@ -57,7 +57,7 @@ def populate_db_core():
         name="Roma",
         lastname="Grigalashvili",
         email="roma.grigalashvili@iliauni.edu.ge",
-        password="Grigalash1",
+        password="PASSWORD",
         role_id=1
     )
     admin_user.create()
@@ -67,7 +67,7 @@ def populate_db_core():
         name="API",
         lastname="USER",
         email="api_user@iliauni.edu.ge",
-        password="ApiUser1",
+        password="PASSWORD",
         role_id=2
     )
     api_user.create()
