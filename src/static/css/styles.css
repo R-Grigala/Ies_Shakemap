@@ -56,6 +56,21 @@ body {
     min-width: 980px;
 }
 
+.publish-toggle-switch {
+    cursor: pointer;
+    transform: scale(1.35);
+    transform-origin: left center;
+    accent-color: #198754;
+}
+
+.publish-toggle-switch:not(:checked) {
+    accent-color: #6c757d;
+}
+
+.publish-toggle-switch:focus {
+    box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+}
+
 @media (min-width: 1200px) {
     .events-map-card #map {
         min-height: 430px;

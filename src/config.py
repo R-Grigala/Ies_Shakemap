@@ -50,6 +50,7 @@ class Config:
         raise ValueError(f"Invalid database configuration for environment: {APP_ENV}")
 
     API_KEY = os.getenv('API_KEY', 'default_api_key')
+    WP_PUBLISH_CODE = os.getenv('WP_PUBLISH_CODE', '')
 
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'default_jwt_secret_key')
     JWT_TOKEN_LOCATION = ["headers", "cookies"]

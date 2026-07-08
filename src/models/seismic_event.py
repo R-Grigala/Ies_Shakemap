@@ -26,6 +26,17 @@ class SeismicEvent(db.Model, BaseModel):
         back_populates="seismic_event",
         uselist=False,
     )
+    published_event = db.relationship(
+        "PublishedEarthquake",
+        back_populates="seismic_event",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    send_notifications = db.relationship(
+        "SendNotification",
+        back_populates="seismic_event",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def shakemap_status(self):
@@ -33,6 +44,10 @@ class SeismicEvent(db.Model, BaseModel):
         if self.shakemap_job and self.shakemap_job.status:
             return self.shakemap_job.status
         return "pending"
+
+    @property
+    def is_published(self):
+        return bool(self.published_event)
 
     def __repr__(self):
         return f"<SeismicEvent id={self.id} seiscomp_oid={self.seiscomp_oid} lat={self.latitude} lon={self.longitude}>"
