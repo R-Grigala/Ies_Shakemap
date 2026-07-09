@@ -108,6 +108,24 @@ async function togglePublishEvent(toggle) {
   const currentlyPublished = toggle.dataset.published === "1";
   const endpoint = currentlyPublished ? "/api/unpublish_event" : "/api/publish_event";
   const actionText = currentlyPublished ? "unpublish" : "publish";
+  const confirmMessage = currentlyPublished
+    ? "Are you sure you want to cancel publication for this event?"
+    : "Are you sure you want to publish this event?";
+
+  const confirmed = window.showConfirmModal
+    ? await window.showConfirmModal({
+        title: currentlyPublished ? "Cancel publication" : "Publish event",
+        message: confirmMessage,
+        confirmText: currentlyPublished ? "Unpublish" : "Publish",
+        cancelText: "Cancel",
+        confirmClass: currentlyPublished ? "btn-warning" : "btn-success",
+      })
+    : window.confirm(confirmMessage);
+
+  if (!confirmed) {
+    toggle.checked = currentlyPublished;
+    return;
+  }
 
   toggle.disabled = true;
   try {
