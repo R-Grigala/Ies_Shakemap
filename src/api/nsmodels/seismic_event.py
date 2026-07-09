@@ -18,6 +18,7 @@ event_model = api.model('SeismicEvent', {
     'area': fields.String(description='Area name'),
     'ml': fields.Float(required=True, description='Local Magnitude (ML)'),
     'created_at': fields.DateTime(description='Record creation timestamp (UTC)'),
+    'is_published': fields.Boolean(description='Whether event is published to external site'),
     'shakemap_status': fields.String(
         description='ShakeMap status (pending/running/generated/failed)',
         enum=['pending', 'running', 'generated', 'failed'],
