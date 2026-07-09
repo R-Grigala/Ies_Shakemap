@@ -10,3 +10,8 @@ from src.api.nsmodels.notif_recips import (
     phone_recipient_parser,
     email_recipient_parser,
 )
+from src.api.nsmodels.publish_event import (
+    publish_event_ns,
+    publish_event_model,
+    publish_event_parser,
+)

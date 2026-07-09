@@ -88,6 +88,63 @@ function syncActionColumnVisibility(canManageEvents) {
   eventsActionHeader.classList.toggle("d-none", !canManageEvents);
 }
 
+function setPublishSwitchState(toggle, published) {
+  toggle.dataset.published = published ? "1" : "0";
+  toggle.checked = published;
+  toggle.title = `Publish: ${published ? "ON" : "OFF"}`;
+}
+
+async function togglePublishEvent(toggle) {
+  if (!(await requireEventsAuth("publish event"))) {
+    toggle.checked = toggle.dataset.published === "1";
+    return;
+  }
+  const seiscompOid = toggle.dataset.seiscompOid;
+  if (!seiscompOid) {
+    showAlert("alertPlaceholder", "danger", "SeisComP OID is missing.");
+    toggle.checked = false;
+    return;
+  }
+  const currentlyPublished = toggle.dataset.published === "1";
+  const endpoint = currentlyPublished ? "/api/unpublish_event" : "/api/publish_event";
+  const actionText = currentlyPublished ? "unpublish" : "publish";
+
+  toggle.disabled = true;
+  try {
+    const data = await window.makeApiRequest(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({ seiscomp_oid: seiscompOid }),
+    });
+    if (!data || data.error) {
+      showAlert("alertPlaceholder", "danger", data?.error || `Failed to ${actionText} event.`);
+      toggle.checked = currentlyPublished;
+      return;
+    }
+    const nextPublished = !currentlyPublished;
+    setPublishSwitchState(toggle, nextPublished);
+    showAlert("alertPlaceholder", "success", data.message || `Event ${actionText}ed successfully.`);
+  } catch {
+    toggle.checked = currentlyPublished;
+    showAlert("alertPlaceholder", "danger", `Request failed while trying to ${actionText} event.`);
+  } finally {
+    toggle.disabled = false;
+  }
+}
+
+function bindPublishSwitches() {
+  const toggles = document.querySelectorAll(".publish-toggle-switch");
+  toggles.forEach((toggle) => {
+    setPublishSwitchState(toggle, toggle.dataset.published === "1");
+    toggle.addEventListener("change", async () => {
+      await togglePublishEvent(toggle);
+    });
+  });
+}
+
 
 function renderEvents(events) {
   const canManageEvents =
@@ -146,6 +203,16 @@ function renderEvents(events) {
                 style="width: 14px; height: 14px;"
               >
             </button>
+            <div class="form-check form-switch mt-1 publish-toggle-wrapper content-center">
+              <input
+                class="form-check-input publish-toggle-switch"
+                type="checkbox"
+                role="switch"
+                data-seiscomp-oid="${escapeHtml(event.seiscomp_oid || "")}"
+                data-published="${event.is_published || event.published ? "1" : "0"}"
+                ${event.is_published || event.published ? "checked" : ""}
+              >
+            </div>
           </div>
         </td>
           `
@@ -164,6 +231,7 @@ function renderEvents(events) {
     )
     .join("");
 
+  bindPublishSwitches();
   eventsStatus.textContent = `Loaded ${sortedEvents.length} earthquakes.`;
 }
 
