@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}
+EarthQuakeWatch | Events
+{% endblock %}
+
+{% block body %}
+
+<div class="container-fluid container-lg py-2">
+  <div class="row g-2 align-items-stretch">
+    <div class="col-12 col-xl-4 d-flex">
+      {% include "filterEvent.html" %}
+    </div>
+    <div class="col-12 col-xl-8 d-flex">
+      <div id="mapDiv" class="card h-100 w-100 events-map-card">
+        <div id="map"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="container-fluid container-lg">
+  <div class="d-flex justify-content-end bg-white border rounded-3 shadow-sm p-2">
+    <button
+      type="button"
+      id="btnCreateEvent"
+      class="btn btn-sm btn-primary"
+      data-bs-toggle="modal"
+      data-bs-target="#createEventModal"
+    >
+      Add Earthquake
+    </button>
+  </div>
+</div>
+
+{% include "createEvent.html" %}
+
+<div class="container-fluid container-lg py-2 py-md-2">
+  <div class="card shadow-sm">
+    <div class="card-header fw-semibold">Earthquake List</div>
+    <div class="card-body">
+      <div id="eventsStatus" class="text-muted mb-3">Loading...</div>
+      <div class="table-responsive events-table-scroll">
+        <table class="table table-sm table-hover align-middle mb-0 text-nowrap text-center events-table">
+          <thead>
+            <tr>
+              <th id="eventsActionHeader">Action</th>
+              <th>Event ID</th>
+              <th>SeisComP OID</th>
+              <th>Earthquake Time</th>
+              <th>Magnitude (ML)</th>
+              <th>Depth (km)</th>
+              <th>Latitude</th>
+              <th>Longitude</th>
+              <th>Location</th>
+            </tr>
+          </thead>
+          <tbody id="eventsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% include "editEvent.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript" src="{{ url_for('static', filename='js/events/map.js') }}"></script>
+<script src="{{ url_for('static', filename='js/events/events.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/events/filterEvent.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/events/createEvent.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/events/editEvent.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/events/deleteEvent.js') }}" defer></script>
+{% endblock %}
