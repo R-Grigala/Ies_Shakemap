@@ -1,0 +1,46 @@
+Celery კონფიგურაცია (Redis-ით)
+=============================
+
+1) Python dependency
+--------------------
+აქტიურ venv-ში დააყენე:
+pip install celery redis
+
+და დაამატე `requirements.txt`-შიც (რომ deploy-ზე არ დაგეკარგოს).
+
+2) .env პარამეტრები
+-------------------
+.env-ში დაამატე:
+
+REDIS_URL=redis://127.0.0.1:6379/0
+CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/1
+
+# თუ Redis-ზე პაროლი გაქვს:
+# REDIS_URL=redis://:YOUR_STRONG_REDIS_PASSWORD@127.0.0.1:6379/0
+# CELERY_BROKER_URL=redis://:YOUR_STRONG_REDIS_PASSWORD@127.0.0.1:6379/0
+# CELERY_RESULT_BACKEND=redis://:YOUR_STRONG_REDIS_PASSWORD@127.0.0.1:6379/1
+
+
+3) systemd service Celery-სთვის (რეკომენდებული)
+-----------------------------------------------
+შექმენი:
+sudo nano /etc/systemd/system/ies_monitoring_celery.service
+
+გადაიტანე შემდეგი კონფიგურაცია რომელიც მოცემულია ies_monitoring_celery.service-ში.
+
+4) systemd აქტივაცია
+--------------------
+sudo systemctl daemon-reload
+sudo systemctl enable ies_monitoring_celery
+sudo systemctl restart ies_monitoring_celery
+sudo systemctl status ies_monitoring_celery
+
+5) ლოგების მონიტორინგი
+----------------------
+journalctl -u ies_monitoring_celery -f
+
+6) სწრაფი შემოწმება
+-------------------
+შემოწმება რომ კონფიგურაცია მოქმედია:
+python -c "from src.celery_app import celery; print(celery.broker_connection().as_uri())"
