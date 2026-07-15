@@ -1,0 +1,193 @@
+# Ies_Monitoring — პროექტის მოკლე ინსტრუქცია
+
+## რას აკეთებს ეს პროექტი
+ეს არის Flask-ზე აგებული სეისმური მონიტორინგის სისტემა, რომელიც:
+- ინახავს მიწისძვრის ივენთებს ბაზაში
+- უშვებს ShakeMap გენერაციას SeisComP OID-ით
+- აჩვენებს გენერირებულ სურათებს (pga/pgv/intensity)
+- მართავს მომხმარებლებს, როლებს და ავტორიზაციას (JWT)
+
+---
+
+## მთავარი გვერდები (Frontend)
+- `/` — მთავარი გვერდი
+- `/shakemap` — ShakeMap ოპერაციები: ივენთების სია, regenerate, gallery
+- `/events` — ივენთების დამატება/დათვალიერება ცალკე გვერდზე
+- `/login` — ავტორიზაცია
+- `/change_password` — შიგნიდან პაროლის შეცვლა (JWT + ძველი პაროლი)
+- `/reset_password/<token>` — მეილიდან მოსული პაროლის აღდგენა (token flow)
+- `/accounts` — მომხმარებლებისა და როლების მართვა (უფლებებზე დამოკიდებული)
+
+---
+
+## API (მთავარი endpoint-ები)
+
+### ივენთები
+- `GET /api/events` — ივენთების სია
+- `POST /api/events` — ივენთის შექმნა/განახლება (`X-API-Key` სავალდებულოა)
+
+### ShakeMap
+- `POST /api/shakemap` — ShakeMap გაშვება (`seiscomp_oid`)
+  - ავტორიზაცია: ან `X-API-Key`, ან `Authorization: Bearer <JWT>`
+- `GET /api/shakemap/<seiscomp_oid>` — კონკრეტული ივენთის ShakeMap შედეგები (images + paths)
+- `GET /api/shakemap/<seiscomp_oid>/image/<image_type>` — კონკრეტული სურათის ფაილი
+
+### Auth
+- `POST /api/login` — login (აბრუნებს `access_token`, `refresh_token`, `permissions_token`)
+- `POST /api/refresh` — access token განახლება refresh token-ით
+- `POST /api/registration` — ახალი მომხმარებლის დამატება (მხოლოდ უფლებამოსილი user/admin)
+
+### Accounts / Password
+- `GET /api/user` — მიმდინარე user ინფორმაცია
+- `PUT /api/user/<uuid>` — საკუთარი პროფილის განახლება
+- `GET /api/accounts` — user list (role permission)
+- `PUT /api/accounts/<uuid>` — user role-ის შეცვლა
+- `GET/POST /api/roles` — როლების სია/დამატება
+- `GET/PUT /api/roles/<role_id>` — როლის ნახვა/რედაქტირება
+- `POST /api/request_reset_password` — reset ბმულის გაგზავნა ელფოსტაზე
+- `PUT /api/reset_password` — პაროლის reset token-ით
+- `PUT /api/change_password` — შიდა პაროლის შეცვლა (JWT + ძველი პაროლი)
+
+---
+
+## ავტორიზაციის ტიპები
+პროექტში 2 ტიპის დაცვა გამოიყენება:
+
+1. `ApiKeyAuth`
+- Header: `X-API-Key: <value>`
+- გამოიყენება შიდა/integration endpoint-ებზე
+
+2. `JsonWebToken`
+- Header: `Authorization: Bearer <access_token>`
+- გამოიყენება user/session/permission endpoint-ებზე
+
+Swagger-ში ორივე security სქემა აღწერილია (`/api`).
+
+---
+
+## კონფიგი (მნიშვნელოვანი ENV)
+- `MY_SECRET_KEY`
+- `API_KEY`
+- `JWT_SECRET_KEY`  (აუცილებლად 32+ bytes, ძლიერი მნიშვნელობა)
+- `SHAKEMAP_BASE_PATH`
+- `CONDA_EXE` (მაგ.: `/home/sysop/miniconda3/bin/conda`)
+- `SHAKEMAP_CONDA_ENV` (მაგ.: `shakemap`)
+- DB პარამეტრები (SQLite/MySQL გარემოზე დამოკიდებული)
+- MAIL პარამეტრები (reset password flow-სთვის)
+
+---
+
+## აპლიკაციის გაშვების სრული ინსტრუქცია (Production, service-ით)
+
+### 0) წინაპირობები (აუცილებელი)
+სერვისის გაშვებამდე სერვერზე უნდა იყოს:
+- Python + virtualenv
+- Miniconda/Conda
+- ShakeMap გარემო (`shakemap` conda env)
+- ShakeMap ბრძანებები: `sm_create`, `shake`
+- გამართული ბაზა (MySQL ან SQLite)
+- Nginx (თუ reverse proxy იყენება)
+
+### 1) ShakeMap გარემოს შემოწმება
+იგივე user-ით (მაგ. `sysop`) გადაამოწმე:
+- `which conda` → უნდა აბრუნებდეს conda path-ს
+- `bash -lc 'eval "$(/home/sysop/miniconda3/bin/conda shell.bash hook)" && conda activate shakemap && command -v sm_create && command -v shake'`
+
+თუ რომელიმე command ვერ იპოვა, ჯერ ეს გარემო გაასწორე, მერე გაუშვი აპი.
+
+### 2) ბაზის მომზადება
+- შექმენი ბაზა (თუ MySQL-ია)
+- მიუთითე სწორი DB credentials `.env`-ში
+- საჭიროებისას გაუშვი:
+  - `flask init_db --confirm-text RESET_DB` (სიფრთხილით, reset-ს აკეთებს)
+  - `flask populate_db` (საწყისი მონაცემებისთვის)
+
+### 3) `.env` შევსება (აუცილებელი ველები)
+`.env`-ში შეიყვანე რეალური მნიშვნელობები:
+- `APP_ENV=production`
+- `MY_SECRET_KEY`
+- `JWT_SECRET_KEY`
+- `API_KEY`
+- `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` (ან შესაბამისი SQLALCHEMY URI)
+- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`
+- `SHAKEMAP_BASE_PATH`
+- `CONDA_EXE=/home/sysop/miniconda3/bin/conda`
+- `SHAKEMAP_CONDA_ENV=shakemap`
+- `REDIS_URL=redis://127.0.0.1:6379/0`
+- `CELERY_BROKER_URL=redis://127.0.0.1:6379/0`
+- `CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/1`
+- `SHAKEMAP_GLOBAL_LOCK_FILE=/tmp/ies_shakemap_calc.lock` (არასავალდებულო, რეკომენდებული)
+
+> შენიშვნა: `CONDA_EXE` და `SHAKEMAP_CONDA_ENV` უნდა იყოს იგივე მნიშვნელობები, რასაც `ies_monitoring_main.service` და `ies_monitoring_celery.service` გარემოში იყენებ.
+
+### 4) Gunicorn systemd სერვისის გაშვება
+შექმენი/განაახლე `/etc/systemd/system/ies_monitoring_main.service`  
+(Template იხილე `create_service.txt` ფაილში)
+
+შემდეგ:
+- `sudo systemctl daemon-reload`
+- `sudo systemctl enable ies_monitoring_main`
+- `sudo systemctl restart ies_monitoring_main`
+- `sudo systemctl status ies_monitoring_main`
+
+### 5) სერვისის ლოგების მონიტორინგი
+- `journalctl -u ies_monitoring_main -f`
+- პროექტის ლოგები: `logs/*.log`
+
+თუ ნახავ `Missing command: conda`/`sm_create`/`shake`, ნიშნავს service გარემოში PATH/conda არასწორია და უნდა გასწორდეს service `Environment` ნაწილში.
+
+### 6) Celery worker-ის გაშვება (აუცილებელია ShakeMap რიგისთვის)
+შექმენი/განაახლე `/etc/systemd/system/ies_monitoring_celery.service`  
+(Template იხილე `ies_monitoring_celery.service` ფაილში)
+
+შემდეგ:
+- `sudo systemctl daemon-reload`
+- `sudo systemctl enable ies_monitoring_celery`
+- `sudo systemctl restart ies_monitoring_celery`
+- `sudo systemctl status ies_monitoring_celery`
+
+### 7) Celery ლოგების მონიტორინგი
+- `journalctl -u ies_monitoring_celery -f`
+
+### 8) Celery სწრაფი შემოწმება
+- `python -c "from src.celery_app import celery; print(celery.broker_connection().as_uri())"`
+- status endpoint/UI-დან შეამოწმე, რომ ახალი ShakeMap მოთხოვნა გადადის `waiting -> running -> generated/failed`.
+
+---
+
+## ძირითადი სამუშაო სცენარები
+
+### 1) ივენთის დამატება
+1. გადადი `/events`
+2. შეავსე ფორმა (Origin Time მიიღებს ISO ფორმატს, მაგალითად `2024-07-22T08:08:09.660000`)
+3. გაგზავნისას გამოიყენება `POST /api/events` + `X-API-Key`
+
+### 2) ShakeMap გენერაცია
+1. გადადი `/shakemap`
+2. ივენთთან დააჭირე regenerate აიქონს
+3. სისტემა გაუშვებს `POST /api/shakemap`
+4. წარმატებისას სტატუსი განახლდება
+
+### 3) Gallery ნახვა
+1. `/shakemap` გვერდზე დააჭირე gallery აიქონს
+2. იხსნება modal სურათებით
+3. სურათზე click -> სრულ ზომაზე ახალ tab-ში
+
+### 4) პაროლის შეცვლა
+- შიგნიდან: `/change_password` (ძველი პაროლის გადამოწმებით)
+- მეილიდან: `/reset_password/<token>` (token reset flow)
+
+---
+
+## Deployment მოკლედ
+- რეკომენდებული გაშვება: `systemd + gunicorn + nginx`
+- ShakeMap დათვლა უნდა მუშაობდეს იმავე სერვერზე, სადაც conda/shakemap გარემოა გამართული
+- Docker ფაილები პროექტში არსებობს, მაგრამ production-ში გამოიყენე მხოლოდ მაშინ, როცა გარემოს ცვლადები/volume/PATH სწორადაა დაგეგმილი
+
+---
+
+## შენიშვნა
+თუ API-ში ან Front-ში endpoint შეიცვალა, აუცილებელია:
+1) შესაბამის JS გამოძახებების განახლება  
+2) Swagger დოკის სინქრონიზაცია  
+3) ავტორიზაციის ტიპის (API key vs JWT) შესაბამისობის შემოწმება.

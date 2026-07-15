@@ -1,0 +1,17 @@
+from src.api.nsmodels.seismic_event import event_ns, event_parser, event_model
+from src.api.nsmodels.calc_shakemap import shakemap_ns, shakemap_parser, shakemap_model
+from src.api.nsmodels.auth import auth_ns, registration_parser, auth_parser
+from src.api.nsmodels.accounts import accounts_ns, user_model, user_parser, accounts_model, accounts_parser, roles_model, roles_parser, password_reset_parser, request_password_reset_parser, change_password_parser
+from src.api.nsmodels.filters import filter_ns, filter_parser, filter_model
+from src.api.nsmodels.notif_recips import (
+    notification_ns,
+    phone_recipient_model,
+    email_recipient_model,
+    phone_recipient_parser,
+    email_recipient_parser,
+)
+from src.api.nsmodels.publish_event import (
+    publish_event_ns,
+    publish_event_model,
+    publish_event_parser,
+)
