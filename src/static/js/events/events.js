@@ -117,7 +117,7 @@ function renderEvents(events) {
       <tr>
         <td>
           <div class="d-flex align-items-center gap-1">
-            ${window.buildViewEventButton ? window.buildViewEventButton(event.id) : ""}
+            ${window.buildViewEventButton ? window.buildViewEventButton(event.seiscomp_oid) : ""}
             ${
               canManageEvents
                 ? `
@@ -155,7 +155,7 @@ function renderEvents(events) {
         <td>
           ${
             window.buildEventIdLink
-              ? window.buildEventIdLink(event.id, event.event_id ?? "-")
+              ? window.buildEventIdLink(event.seiscomp_oid, event.event_id ?? "-")
               : escapeHtml(event.event_id ?? "-")
           }
         </td>
