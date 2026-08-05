@@ -81,95 +81,20 @@ function bindCreateEventAuthGuard() {
   });
 }
 
-function syncActionColumnVisibility(canManageEvents) {
+function syncActionColumnVisibility() {
   if (!eventsActionHeader) {
     return;
   }
-  eventsActionHeader.classList.toggle("d-none", !canManageEvents);
+  // Action column always visible (at least View); manage controls are permission-gated per row.
+  eventsActionHeader.classList.remove("d-none");
 }
-
-function setPublishSwitchState(toggle, published) {
-  toggle.dataset.published = published ? "1" : "0";
-  toggle.checked = published;
-  toggle.title = `Publish: ${published ? "ON" : "OFF"}`;
-}
-
-async function togglePublishEvent(toggle) {
-  if (!(await requireEventsAuth("publish event"))) {
-    toggle.checked = toggle.dataset.published === "1";
-    return;
-  }
-  const seiscompOid = toggle.dataset.seiscompOid;
-  if (!seiscompOid) {
-    showAlert("alertPlaceholder", "danger", "SeisComP OID is missing.");
-    toggle.checked = false;
-    return;
-  }
-  const currentlyPublished = toggle.dataset.published === "1";
-  const endpoint = currentlyPublished ? "/api/unpublish_event" : "/api/publish_event";
-  const actionText = currentlyPublished ? "unpublish" : "publish";
-  const confirmMessage = currentlyPublished
-    ? "Are you sure you want to cancel publication for this event?"
-    : "Are you sure you want to publish this event?";
-
-  const confirmed = window.showConfirmModal
-    ? await window.showConfirmModal({
-        title: currentlyPublished ? "Cancel publication" : "Publish event",
-        message: confirmMessage,
-        confirmText: currentlyPublished ? "Unpublish" : "Publish",
-        cancelText: "Cancel",
-        confirmClass: currentlyPublished ? "btn-warning" : "btn-success",
-      })
-    : window.confirm(confirmMessage);
-
-  if (!confirmed) {
-    toggle.checked = currentlyPublished;
-    return;
-  }
-
-  toggle.disabled = true;
-  try {
-    const data = await window.makeApiRequest(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify({ seiscomp_oid: seiscompOid }),
-    });
-    if (!data || data.error) {
-      showAlert("alertPlaceholder", "danger", data?.error || `Failed to ${actionText} event.`);
-      toggle.checked = currentlyPublished;
-      return;
-    }
-    const nextPublished = !currentlyPublished;
-    setPublishSwitchState(toggle, nextPublished);
-    showAlert("alertPlaceholder", "success", data.message || `Event ${actionText}ed successfully.`);
-  } catch {
-    toggle.checked = currentlyPublished;
-    showAlert("alertPlaceholder", "danger", `Request failed while trying to ${actionText} event.`);
-  } finally {
-    toggle.disabled = false;
-  }
-}
-
-function bindPublishSwitches() {
-  const toggles = document.querySelectorAll(".publish-toggle-switch");
-  toggles.forEach((toggle) => {
-    setPublishSwitchState(toggle, toggle.dataset.published === "1");
-    toggle.addEventListener("change", async () => {
-      await togglePublishEvent(toggle);
-    });
-  });
-}
-
 
 function renderEvents(events) {
   const canManageEvents =
     typeof window.hasPermission === "function"
       ? window.hasPermission("can_events")
       : false;
-  syncActionColumnVisibility(canManageEvents);
+  syncActionColumnVisibility();
 
   if (!Array.isArray(events) || events.length === 0) {
     eventsTableBody.innerHTML = "";
@@ -190,11 +115,12 @@ function renderEvents(events) {
     .map(
       (event) => `
       <tr>
-        ${
-          canManageEvents
-            ? `
         <td>
           <div class="d-flex align-items-center gap-1">
+            ${window.buildViewEventButton ? window.buildViewEventButton(event.id) : ""}
+            ${
+              canManageEvents
+                ? `
             <button
               type="button"
               class="btn btn-sm btn-outline-secondary edit-event-btn d-inline-flex align-items-center justify-content-center"
@@ -221,22 +147,18 @@ function renderEvents(events) {
                 style="width: 14px; height: 14px;"
               >
             </button>
-            <div class="form-check form-switch mt-1 publish-toggle-wrapper content-center">
-              <input
-                class="form-check-input publish-toggle-switch"
-                type="checkbox"
-                role="switch"
-                data-seiscomp-oid="${escapeHtml(event.seiscomp_oid || "")}"
-                data-published="${event.is_published || event.published ? "1" : "0"}"
-                ${event.is_published || event.published ? "checked" : ""}
-              >
-            </div>
+            `
+                : ""
+            }
           </div>
         </td>
-          `
-            : ""
-        }
-        <td>${escapeHtml(event.event_id ?? "-")}</td>
+        <td>
+          ${
+            window.buildEventIdLink
+              ? window.buildEventIdLink(event.id, event.event_id ?? "-")
+              : escapeHtml(event.event_id ?? "-")
+          }
+        </td>
         <td>${escapeHtml(event.seiscomp_oid)}</td>
         <td>${escapeHtml(event.origin_time)}</td>
         <td>${escapeHtml(event.ml)}</td>
@@ -249,7 +171,6 @@ function renderEvents(events) {
     )
     .join("");
 
-  bindPublishSwitches();
   eventsStatus.textContent = `Loaded ${sortedEvents.length} earthquakes.`;
 }
 

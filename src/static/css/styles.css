@@ -56,19 +56,198 @@ body {
     min-width: 980px;
 }
 
-.publish-toggle-switch {
+/* ---- Event detail / Static View (reference-style layout) ---- */
+.event-detail-page {
+    --event-accent: #0d9488;
+    --event-border: #e2e5e9;
+    --event-muted: #6c757d;
+    --event-title: #343a40;
+    max-width: 1100px;
+}
+
+.event-detail-back {
+    display: inline-block;
+    color: var(--event-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.event-detail-back:hover {
+    color: var(--event-accent);
+    text-decoration: underline;
+}
+
+.event-detail-title {
+    color: var(--event-title);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.event-summary-banner {
+    background: #fff;
+    border: 1px solid var(--event-border);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+}
+
+.event-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.25rem;
+}
+
+@media (min-width: 768px) {
+    .event-summary-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+.event-summary-label {
+    color: var(--event-muted);
+    font-size: 0.75rem;
+    text-transform: none;
+    margin-bottom: 0.2rem;
+}
+
+.event-summary-value {
+    color: var(--event-title);
+    font-size: 1.05rem;
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.event-summary-unit {
+    font-weight: 500;
+    font-size: 0.85rem;
+    color: var(--event-muted);
+}
+
+.event-summary-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-top: 0.9rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--event-border);
+}
+
+.event-detail-tabs {
+    border-bottom: 1px solid var(--event-border);
+    gap: 0.25rem;
+}
+
+.event-detail-tabs .nav-link {
+    color: var(--event-muted);
+    border: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    padding: 0.65rem 0.9rem;
+    font-weight: 600;
+    background: transparent;
+}
+
+.event-detail-tabs .nav-link:hover {
+    color: var(--event-title);
+}
+
+.event-detail-tabs .nav-link.active {
+    color: var(--event-accent);
+    border-bottom-color: var(--event-accent);
+    background: transparent;
+}
+
+.event-detail-tab-content {
+    background: #fff;
+    border: 1px solid var(--event-border);
+    border-top: none;
+    border-radius: 0 0 0.5rem 0.5rem;
+    padding: 1rem 1.1rem 1.25rem;
+}
+
+.static-view-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.static-view-btn {
+    border: 1px solid #cfd4da;
+    background: #fff;
+    color: #343a40;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    padding: 0.4rem 0.85rem;
+    border-radius: 0.35rem;
     cursor: pointer;
-    transform: scale(1.35);
-    transform-origin: left center;
-    accent-color: #198754;
 }
 
-.publish-toggle-switch:not(:checked) {
-    accent-color: #6c757d;
+.static-view-btn:hover {
+    border-color: var(--event-accent);
+    color: var(--event-accent);
 }
 
-.publish-toggle-switch:focus {
-    box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+.static-view-btn.active {
+    background: var(--event-accent);
+    border-color: var(--event-accent);
+    color: #fff;
+}
+
+.static-view-status {
+    font-size: 0.8rem;
+    margin-bottom: 0.65rem;
+    min-height: 1.2em;
+}
+
+.static-view-stage {
+    border: 1px solid var(--event-border);
+    border-radius: 0.35rem;
+    background: #f8f9fa;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.static-view-image-wrap {
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+.static-view-image {
+    max-width: 100%;
+    height: auto;
+    vertical-align: middle;
+    cursor: zoom-in;
+    background: #fff;
+}
+
+.static-view-empty {
+    color: var(--event-muted);
+    padding: 2rem 1rem;
+    text-align: center;
+}
+
+.metadata-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.9rem 1.25rem;
+}
+
+@media (min-width: 576px) {
+    .metadata-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.metadata-item {
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #f0f1f3;
 }
 
 @media (min-width: 1200px) {

@@ -78,10 +78,15 @@ Swagger UI:
 
 ---
 
+## Documentation
+
+Step-by-step technical docs (Georgian): [`docs/README.md`](docs/README.md).
+
 ## Project Structure
 
 ```text
 app.py
+docs/                   # Stage-based project documentation
 src/
   __init__.py           # App factory
   config.py             # Environment-based config
