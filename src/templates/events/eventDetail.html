@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}
+EarthQuakeWatch | Event {{ event.event_id or event.seiscomp_oid }}
+{% endblock %}
+
+{% block body %}
+{% set location_title = event.location_en or event.location_ge or event.seiscomp_oid %}
+<div
+  class="container-fluid container-lg py-3 event-detail-page"
+  id="shakemapStaticView"
+  data-seiscomp-oid="{{ event.seiscomp_oid }}"
+>
+  <a href="{{ url_for('events.events') }}" class="event-detail-back">
+    &larr; Back
+  </a>
+
+  <h1 class="event-detail-title h3 mb-3">
+    Event: {{ location_title }}
+  </h1>
+
+  {# --- Summary banner (metrics) --- #}
+  <div class="event-summary-banner mb-3">
+    <div class="event-summary-grid">
+      <div class="event-summary-item">
+        <div class="event-summary-label">Time (UTC)</div>
+        <div class="event-summary-value">{{ event.origin_time or "—" }}</div>
+      </div>
+      <div class="event-summary-item">
+        <div class="event-summary-label">Magnitude</div>
+        <div class="event-summary-value">
+          {{ event.ml if event.ml is not none else "—" }}
+          {% if event.ml is not none %}<span class="event-summary-unit">ML</span>{% endif %}
+        </div>
+      </div>
+      <div class="event-summary-item">
+        <div class="event-summary-label">Depth</div>
+        <div class="event-summary-value">
+          {% if event.depth is not none %}{{ event.depth }} <span class="event-summary-unit">km</span>{% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="event-summary-item">
+        <div class="event-summary-label">Lat / Lon</div>
+        <div class="event-summary-value">{{ event.latitude }}, {{ event.longitude }}</div>
+      </div>
+      <div class="event-summary-item">
+        <div class="event-summary-label">Event ID</div>
+        <div class="event-summary-value">{{ event.event_id if event.event_id is not none else event.seiscomp_oid }}</div>
+      </div>
+    </div>
+    <div class="event-summary-meta">
+      <span class="text-muted">SeisComP OID: <code>{{ event.seiscomp_oid }}</code></span>
+      <span class="badge text-bg-info text-dark">ShakeMap: {{ event.shakemap_status }}</span>
+      {% if event.is_published %}
+      <span class="badge text-bg-success">Published</span>
+      {% else %}
+      <span class="badge text-bg-secondary">Not published</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# --- Tabs --- #}
+  <ul class="nav event-detail-tabs mb-0" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button
+        class="nav-link active"
+        id="tab-static-view"
+        data-bs-toggle="tab"
+        data-bs-target="#panel-static-view"
+        type="button"
+        role="tab"
+        aria-controls="panel-static-view"
+        aria-selected="true"
+      >
+        Static View
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button
+        class="nav-link"
+        id="tab-metadata"
+        data-bs-toggle="tab"
+        data-bs-target="#panel-metadata"
+        type="button"
+        role="tab"
+        aria-controls="panel-metadata"
+        aria-selected="false"
+      >
+        Metadata
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content event-detail-tab-content">
+    {# --- Static View panel --- #}
+    <div
+      class="tab-pane fade show active"
+      id="panel-static-view"
+      role="tabpanel"
+      aria-labelledby="tab-static-view"
+    >
+      <div class="static-view-toolbar" id="shakemapTypeToolbar" role="group" aria-label="ShakeMap product type">
+        <button type="button" class="static-view-btn active" data-image-type="intensity">INTENSITY</button>
+        <button type="button" class="static-view-btn" data-image-type="pga">PGA</button>
+        <button type="button" class="static-view-btn" data-image-type="pgv">PGV</button>
+      </div>
+
+      <div id="shakemapImagesStatus" class="static-view-status text-muted">Loading ShakeMap products...</div>
+
+      <div class="static-view-stage">
+        <a
+          id="shakemapStaticImageLink"
+          href="#"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="static-view-image-wrap d-none"
+          title="Open full size in a new tab"
+        >
+          <img id="shakemapStaticImage" class="static-view-image" alt="ShakeMap static product" />
+        </a>
+        <div id="shakemapStaticEmpty" class="static-view-empty">
+          No product selected yet.
+        </div>
+      </div>
+    </div>
+
+    {# --- Metadata panel --- #}
+    <div
+      class="tab-pane fade"
+      id="panel-metadata"
+      role="tabpanel"
+      aria-labelledby="tab-metadata"
+    >
+      <div class="metadata-grid">
+        <div class="metadata-item">
+          <div class="event-summary-label">Record ID</div>
+          <div class="event-summary-value">{{ event.id }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Event ID</div>
+          <div class="event-summary-value">{{ event.event_id if event.event_id is not none else "—" }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">SeisComP OID</div>
+          <div class="event-summary-value"><code>{{ event.seiscomp_oid }}</code></div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Origin time</div>
+          <div class="event-summary-value">{{ event.origin_time or "—" }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Origin msec</div>
+          <div class="event-summary-value">{{ event.origin_msec if event.origin_msec is not none else "—" }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Magnitude (ML)</div>
+          <div class="event-summary-value">{{ event.ml if event.ml is not none else "—" }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Depth (km)</div>
+          <div class="event-summary-value">{{ event.depth if event.depth is not none else "—" }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Latitude</div>
+          <div class="event-summary-value">{{ event.latitude }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Longitude</div>
+          <div class="event-summary-value">{{ event.longitude }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Area</div>
+          <div class="event-summary-value">{{ event.area or "—" }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Location (GE)</div>
+          <div class="event-summary-value">{{ event.location_ge or "—" }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Location (EN)</div>
+          <div class="event-summary-value">{{ event.location_en or "—" }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">Created at (UTC)</div>
+          <div class="event-summary-value">{{ event.created_at or "—" }}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="event-summary-label">ShakeMap status</div>
+          <div class="event-summary-value">{{ event.shakemap_status }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/events/eventDetail.js') }}" defer></script>
+{% endblock %}

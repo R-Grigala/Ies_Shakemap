@@ -1,7 +1,7 @@
 import requests
 
 
-WP_AJAX_URL = "https://ies.iliauni.edu.ge/wp-admin/admin-ajax.php"
+WP_AJAX_URL = "https://ies-staging.iliauni.edu.ge/wp-admin/admin-ajax.php"
 
 
 def _post_wp_ajax(payload, timeout=20):
