@@ -30,7 +30,7 @@ def calc_shakemap(parsed_data):
     )
     logger.info("Running ShakeMap for event %s with command: %s", event_id, sm_create_cmd)
 
-    shake_cmd = f'echo {event_id} | shake {event_id} select assemble model contour mapping'
+    shake_cmd = f'echo {event_id} | shake {event_id} select assemble model contour mapping kml'
 
     bash_command = (
         f'eval "$({shlex.quote(conda_exe)} shell.bash hook)" '
