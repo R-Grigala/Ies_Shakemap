@@ -17,10 +17,33 @@ function initMap() {
     map = new google.maps.Map(document.getElementById("map"), myOptions);
 }
 
+function resolveEventDetailUrl(event) {
+    if (event == null || event.id === undefined || event.id === null || event.id === "") {
+        return null;
+    }
+    if (typeof window.getEventDetailUrl === "function") {
+        return window.getEventDetailUrl(event.id);
+    }
+    return `/events/${encodeURIComponent(event.id)}`;
+}
+
+function buildMarkerTitle(event) {
+    const parts = [
+        event.event_id != null ? `Event ID: ${event.event_id}` : null,
+        event.ml != null ? `ML ${event.ml}` : null,
+        event.location_en || event.location_ge || null,
+    ].filter(Boolean);
+    return parts.join(" · ") || "Earthquake event";
+}
+
 function updateMapMarkers(events) {
     // Remove existing markers from the map
     markers.forEach(marker => marker.setMap(null));
     markers = []; // Clear the markers array
+
+    if (!map || !Array.isArray(events)) {
+        return;
+    }
 
     events.forEach(event => {
         var latitude = parseFloat(event.latitude);
@@ -32,36 +55,32 @@ function updateMapMarkers(events) {
         var marker = new google.maps.Marker({
             position: {lat: latitude, lng: longitude},
             map: map,
-            title: String(event.event_id || ''),
+            title: buildMarkerTitle(event),
+            cursor: "pointer",
             icon: {
                 url: '/static/img/event_red.png',
                 scaledSize: new google.maps.Size(20, 20)
             }
         });
-        attachInfoWindow(marker, event);
+        attachEventDetailNavigation(marker, event);
         markers.push(marker); // Add marker to the array
     });
 }
 
-function attachInfoWindow(marker, event) {
-    var infoWindow = new google.maps.InfoWindow({
-        content: `
-            <div class="text-center">
-                <strong>Event ID: ${event.event_id ?? '-'}</strong><br>
-                <strong>Earthquake time: ${event.origin_time}</strong><br>
-                <strong>Magnitude (ML): ${event.ml}</strong><br>
-                <strong>Depth (km): ${event.depth}</strong><br>
-                <strong>Latitude: ${event.latitude}</strong><br>
-                <strong>Longitude: ${event.longitude}</strong><br>
-                <strong>Location: ${event.location_ge || event.location_en || '-'}</strong><br>
-            </div>`
-    });
-    marker.addListener('click', function() {
-        infoWindow.open(map, marker);
+function attachEventDetailNavigation(marker, event) {
+    var detailUrl = resolveEventDetailUrl(event);
+    if (!detailUrl) {
+        return;
+    }
+
+    marker.addListener("click", function () {
+        window.location.href = detailUrl;
     });
 }
 
 // Initialize the map when the page loads
 document.addEventListener("DOMContentLoaded", function() {
     initMap();
-    });
+});
+
+window.updateMapMarkers = updateMapMarkers;
