@@ -13,12 +13,16 @@ from src.tasks.shakemap import run_shakemap
 from src.config import Config
 
 SHAKEMAP_BASE_PATH = Config.SHAKEMAP_BASE_PATH
-# დაშვებული სურათების ტიპები
+# დაშვებული სურათების ტიპები (products ფოლდერში)
 ALLOWED_IMAGES = {
-    "pga": "pga.jpg",
     "intensity": "intensity.jpg",
+    "pga": "pga.jpg",
     "pgv": "pgv.jpg",
+    "psa03": "psa03.jpg",  # PSA 0.3s
+    "psa10": "psa10.jpg",  # PSA 1.0s
+    "psa30": "psa30.jpg",  # PSA 3.0s
 }
+
 
 logger = logging.getLogger("app.shakemap_api")
 
@@ -166,7 +170,7 @@ class ShakeMapResults(Resource):
 @shakemap_ns.doc(
     params={
         "seiscomp_oid": "SeisComP Event OID",
-        "image_type": "ShakeMap image type: pga, pgv, intensity",
+        "image_type": "ShakeMap image type: intensity, pga, pgv, psa03 (0.3s), psa10 (1.0s), psa30 (3.0s)",
     },
     responses={
         200: 'OK',
