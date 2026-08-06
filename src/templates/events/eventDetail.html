@@ -49,13 +49,42 @@ EarthQuakeWatch | Event {{ event.event_id or event.seiscomp_oid }}
       </div>
     </div>
     <div class="event-summary-meta">
-      <span class="text-muted">SeisComP OID: <code>{{ event.seiscomp_oid }}</code></span>
-      <span class="badge text-bg-info text-dark">ShakeMap: {{ event.shakemap_status }}</span>
-      {% if event.is_published %}
-      <span class="badge text-bg-success">Published</span>
-      {% else %}
-      <span class="badge text-bg-secondary">Not published</span>
-      {% endif %}
+      <span class="text-muted">SeisComP OID: <code id="eventSeiscompOidLabel">{{ event.seiscomp_oid }}</code></span>
+
+      <div class="event-status-action">
+        <span
+          id="shakemapStatusBadge"
+          class="badge text-bg-info text-dark"
+          data-status="{{ event.shakemap_status }}"
+        >ShakeMap: {{ event.shakemap_status }}</span>
+        <button
+          type="button"
+          id="btnGenerateShakemap"
+          class="btn btn-sm btn-outline-warning d-none"
+          data-seiscomp-oid="{{ event.seiscomp_oid }}"
+          title="Generate or regenerate ShakeMap"
+        >
+          Generate ShakeMap
+        </button>
+      </div>
+
+      <div class="event-status-action">
+        <span
+          id="publishStatusBadge"
+          class="badge {% if event.is_published %}text-bg-success{% else %}text-bg-secondary{% endif %}"
+          data-published="{{ '1' if event.is_published else '0' }}"
+        >{% if event.is_published %}Published{% else %}Not published{% endif %}</span>
+        <button
+          type="button"
+          id="btnTogglePublish"
+          class="btn btn-sm {% if event.is_published %}btn-outline-warning{% else %}btn-outline-success{% endif %} d-none"
+          data-seiscomp-oid="{{ event.seiscomp_oid }}"
+          data-published="{{ '1' if event.is_published else '0' }}"
+          title="Publish or unpublish this event"
+        >
+          {% if event.is_published %}Unpublish{% else %}Publish{% endif %}
+        </button>
+      </div>
     </div>
   </div>
 

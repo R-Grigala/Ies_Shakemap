@@ -300,9 +300,263 @@ function bindEventDetailMapTab() {
   });
 }
 
+function showAlertSafe(type, message) {
+  if (typeof showAlert === "function") {
+    showAlert("alertPlaceholder", type, message);
+  }
+}
+
+async function requireDetailAuth(permission, actionLabel) {
+  const token = window.localStorage.getItem("access_token");
+  if (!token) {
+    showAlertSafe("danger", `Please log in to ${actionLabel}.`);
+    return false;
+  }
+
+  if (typeof isTokenExpired === "function" && isTokenExpired(token)) {
+    if (typeof refreshToken === "function") {
+      const refreshed = await refreshToken();
+      if (!refreshed) {
+        showAlertSafe("danger", `Please sign in again to ${actionLabel}.`);
+        return false;
+      }
+    } else {
+      showAlertSafe("danger", `Please sign in again to ${actionLabel}.`);
+      return false;
+    }
+  }
+
+  if (typeof window.hasPermission === "function" && !window.hasPermission(permission)) {
+    showAlertSafe("danger", `You do not have permission to ${actionLabel}.`);
+    return false;
+  }
+
+  if (typeof window.makeApiRequest !== "function") {
+    showAlertSafe("danger", "Authorization module failed to load.");
+    return false;
+  }
+
+  return true;
+}
+
+function getDetailSeiscompOid() {
+  const root = document.getElementById("shakemapStaticView");
+  const oidFromRoot = (root?.dataset?.seiscompOid || "").trim();
+  if (oidFromRoot) {
+    return oidFromRoot;
+  }
+  const btn = document.getElementById("btnGenerateShakemap") || document.getElementById("btnTogglePublish");
+  return (btn?.dataset?.seiscompOid || "").trim();
+}
+
+function getShakemapBadgeClass(status) {
+  switch (status) {
+    case "generated":
+      return "badge text-bg-success";
+    case "waiting":
+    case "running":
+      return "badge text-bg-warning text-dark";
+    case "failed":
+      return "badge text-bg-danger";
+    case "pending":
+    default:
+      return "badge text-bg-info text-dark";
+  }
+}
+
+function updateShakemapStatusUi(status) {
+  const badge = document.getElementById("shakemapStatusBadge");
+  const btn = document.getElementById("btnGenerateShakemap");
+  const normalized = String(status || "pending").toLowerCase();
+
+  if (badge) {
+    badge.dataset.status = normalized;
+    badge.className = getShakemapBadgeClass(normalized);
+    badge.textContent = `ShakeMap: ${normalized}`;
+  }
+
+  if (!btn) {
+    return;
+  }
+
+  const canShakemap =
+    typeof window.hasPermission === "function" ? window.hasPermission("can_shakemap") : false;
+  btn.classList.toggle("d-none", !canShakemap);
+
+  const busy = normalized === "waiting" || normalized === "running";
+  btn.disabled = busy;
+  if (busy) {
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Running...';
+  } else if (normalized === "generated") {
+    btn.textContent = "Regenerate ShakeMap";
+  } else {
+    btn.textContent = "Generate ShakeMap";
+  }
+}
+
+function updatePublishStatusUi(published) {
+  const badge = document.getElementById("publishStatusBadge");
+  const btn = document.getElementById("btnTogglePublish");
+  const isPublished = Boolean(published);
+
+  if (badge) {
+    badge.dataset.published = isPublished ? "1" : "0";
+    badge.className = isPublished ? "badge text-bg-success" : "badge text-bg-secondary";
+    badge.textContent = isPublished ? "Published" : "Not published";
+  }
+
+  if (!btn) {
+    return;
+  }
+
+  const canEvents =
+    typeof window.hasPermission === "function" ? window.hasPermission("can_events") : false;
+  btn.classList.toggle("d-none", !canEvents);
+  btn.dataset.published = isPublished ? "1" : "0";
+  btn.textContent = isPublished ? "Unpublish" : "Publish";
+  btn.classList.toggle("btn-outline-warning", isPublished);
+  btn.classList.toggle("btn-outline-success", !isPublished);
+  btn.disabled = false;
+}
+
+function initDetailStatusActions() {
+  const badge = document.getElementById("shakemapStatusBadge");
+  const status = badge?.dataset?.status || "pending";
+  updateShakemapStatusUi(status);
+
+  const publishBadge = document.getElementById("publishStatusBadge");
+  const published = publishBadge?.dataset?.published === "1";
+  updatePublishStatusUi(published);
+
+  const generateBtn = document.getElementById("btnGenerateShakemap");
+  if (generateBtn) {
+    generateBtn.addEventListener("click", onGenerateShakemapClick);
+  }
+
+  const publishBtn = document.getElementById("btnTogglePublish");
+  if (publishBtn) {
+    publishBtn.addEventListener("click", onTogglePublishClick);
+  }
+}
+
+async function onGenerateShakemapClick() {
+  const btn = document.getElementById("btnGenerateShakemap");
+  if (!btn) {
+    return;
+  }
+  if (!(await requireDetailAuth("can_shakemap", "generate ShakeMap"))) {
+    return;
+  }
+
+  const seiscompOid = getDetailSeiscompOid() || (btn.dataset.seiscompOid || "").trim();
+  if (!seiscompOid) {
+    showAlertSafe("danger", "SeisComP OID is missing.");
+    return;
+  }
+
+  btn.disabled = true;
+  const previousLabel = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Queuing...';
+
+  try {
+    const payload = await window.makeApiRequest("/api/shakemap", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({ seiscomp_oid: seiscompOid }),
+    });
+
+    if (!payload || payload.error) {
+      showAlertSafe("danger", payload?.error || "Failed to queue ShakeMap.");
+      btn.disabled = false;
+      btn.innerHTML = previousLabel;
+      return;
+    }
+
+    showAlertSafe("success", payload.message || `ShakeMap queued (${seiscompOid}).`);
+    updateShakemapStatusUi(payload.status || "waiting");
+  } catch {
+    showAlertSafe("danger", "Request failed while queueing ShakeMap.");
+    btn.disabled = false;
+    btn.innerHTML = previousLabel;
+  }
+}
+
+async function onTogglePublishClick() {
+  const btn = document.getElementById("btnTogglePublish");
+  if (!btn) {
+    return;
+  }
+  if (!(await requireDetailAuth("can_events", "publish this event"))) {
+    return;
+  }
+
+  const seiscompOid = getDetailSeiscompOid() || (btn.dataset.seiscompOid || "").trim();
+  if (!seiscompOid) {
+    showAlertSafe("danger", "SeisComP OID is missing.");
+    return;
+  }
+
+  const currentlyPublished = btn.dataset.published === "1";
+  const endpoint = currentlyPublished ? "/api/unpublish_event" : "/api/publish_event";
+  const actionText = currentlyPublished ? "unpublish" : "publish";
+  const confirmMessage = currentlyPublished
+    ? "Are you sure you want to unpublish this event?"
+    : "Are you sure you want to publish this event?";
+
+  const confirmed = window.showConfirmModal
+    ? await window.showConfirmModal({
+        title: currentlyPublished ? "Cancel publication" : "Publish event",
+        message: confirmMessage,
+        confirmText: currentlyPublished ? "Unpublish" : "Publish",
+        cancelText: "Cancel",
+        confirmClass: currentlyPublished ? "btn-warning" : "btn-success",
+      })
+    : window.confirm(confirmMessage);
+
+  if (!confirmed) {
+    return;
+  }
+
+  btn.disabled = true;
+  const previousLabel = btn.textContent;
+  btn.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i>${
+    currentlyPublished ? "Unpublishing..." : "Publishing..."
+  }`;
+
+  try {
+    const data = await window.makeApiRequest(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({ seiscomp_oid: seiscompOid }),
+    });
+
+    if (!data || data.error) {
+      showAlertSafe("danger", data?.error || `Failed to ${actionText} event.`);
+      btn.disabled = false;
+      btn.textContent = previousLabel;
+      return;
+    }
+
+    const nextPublished = data.published != null ? Boolean(data.published) : !currentlyPublished;
+    updatePublishStatusUi(nextPublished);
+    showAlertSafe("success", data.message || `Event ${actionText}ed successfully.`);
+  } catch {
+    showAlertSafe("danger", `Request failed while trying to ${actionText} event.`);
+    btn.disabled = false;
+    btn.textContent = previousLabel;
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   loadShakemapStaticView();
   bindEventDetailMapTab();
+  initDetailStatusActions();
   // Map is the default active tab — init after Leaflet (defer) is ready.
   const tryInit = () => {
     if (typeof L !== "undefined") {

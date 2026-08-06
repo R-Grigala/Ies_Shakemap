@@ -6,7 +6,6 @@ document.addEventListener("DOMContentLoaded", function() {
     const navItems = [
         { endpoint: '/', text: 'Home' },
         { endpoint: '/events', text: 'Earthquakes' },
-        { endpoint: '/shakemap', text: 'ShakeMap' },
         // Add other static links as needed
     ];
 
