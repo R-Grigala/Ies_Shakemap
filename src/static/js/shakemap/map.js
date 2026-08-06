@@ -372,24 +372,47 @@ async function initShakeMapMap(event, options = {}) {
   ShakeMap.map.fitBounds(bounds);
   ShakeMap.infoWindow = new google.maps.InfoWindow();
 
-  // Epicenter marker
-  const epicSvg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-      <circle cx="14" cy="14" r="12" fill="none" stroke="#dc3545" stroke-width="2" opacity="0.55"/>
-      <circle cx="14" cy="14" r="5" fill="#dc3545" stroke="#fff" stroke-width="1.5"/>
-    </svg>
-  `.trim();
+  // Epicenter star — prefers classic PNG/GIF if present, else SVG.
+  // Drop your original asset at:
+  //   /static/img/epicenterIconStar.png  or  .gif
+  // SVG default ships with the project.
   ShakeMap.epicenterMarker = new google.maps.Marker({
     position: { lat, lng: lon },
     map: ShakeMap.map,
     title: "Epicenter",
     zIndex: 1000,
     icon: {
-      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(epicSvg)}`,
-      scaledSize: new google.maps.Size(28, 28),
-      anchor: new google.maps.Point(14, 14),
+      url: "/static/img/epicenterIconStar.svg",
+      scaledSize: new google.maps.Size(40, 40),
+      anchor: new google.maps.Point(20, 20),
     },
   });
+  // Prefer PNG, then GIF (animated if provided), over SVG when available.
+  (function preferClassicEpicenterIcon(marker) {
+    const candidates = [
+      "/static/img/epicenterIconStar.png",
+      "/static/img/epicenterIconStar.gif",
+    ];
+    let index = 0;
+    const tryNext = () => {
+      if (index >= candidates.length || !marker) {
+        return;
+      }
+      const url = candidates[index++];
+      const probe = new Image();
+      probe.onload = () => {
+        marker.setIcon({
+          url,
+          scaledSize: new google.maps.Size(40, 40),
+          anchor: new google.maps.Point(20, 20),
+        });
+      };
+      probe.onerror = tryNext;
+      probe.src = url;
+    };
+    tryNext();
+  })(ShakeMap.epicenterMarker);
+
   ShakeMap.epicenterMarker.addListener("click", () => {
     openInfoWindow({ lat, lng: lon }, "<strong>Epicenter</strong>");
   });

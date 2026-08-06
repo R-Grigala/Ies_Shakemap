@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- ShakeMap-style epicenter star -->
+  <polygon
+    points="32,4 39.5,24.5 61,24.5 43.5,37.5 50.5,58 32,45.5 13.5,58 20.5,37.5 3,24.5 24.5,24.5"
+    fill="#111111"
+    stroke="#ffffff"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+  <polygon
+    points="32,10 38,25.5 54.5,25.5 41,35.5 46,51.5 32,41.5 18,51.5 23,35.5 9.5,25.5 26,25.5"
+    fill="#1a1a1a"
+  />
+</svg>
