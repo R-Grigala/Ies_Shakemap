@@ -250,6 +250,94 @@ body {
     border-bottom: 1px solid #f0f1f3;
 }
 
+/* Leaflet map tab on event detail */
+.shakemap-map-canvas {
+    width: 100%;
+    height: 520px;
+    min-height: 360px;
+    border: 1px solid var(--event-border, #e2e5e9);
+    border-radius: 0.35rem;
+    background: #e9ecef;
+    z-index: 1;
+}
+
+.shakemap-layer-panel {
+    border: 1px solid var(--event-border, #e2e5e9);
+    border-radius: 0.35rem;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    max-height: 520px;
+    overflow-y: auto;
+}
+
+.shakemap-layer-panel label {
+    display: block;
+    margin-bottom: 0.4rem;
+    cursor: pointer;
+    color: #343a40;
+}
+
+.epicenter-marker {
+    background: transparent;
+    border: none;
+}
+
+.epicenter-container {
+    position: relative;
+    width: 40px;
+    height: 40px;
+}
+
+.epicenter-star {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #111;
+    font-size: 22px;
+    line-height: 1;
+    text-shadow: 0 0 2px #fff, 0 0 4px #fff;
+    z-index: 2;
+}
+
+.epicenter-pulse {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border-radius: 50%;
+    background: rgba(220, 53, 69, 0.45);
+    animation: epicenter-pulse 1.8s ease-out infinite;
+    z-index: 1;
+}
+
+.epicenter-pulse.pulse-2 {
+    animation-delay: 0.6s;
+}
+
+@keyframes epicenter-pulse {
+    0% {
+        transform: scale(0.6);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(2.8);
+        opacity: 0;
+    }
+}
+
+.shakemap-legend-img {
+    max-width: min(700px, 90vw);
+    display: block;
+    background: white;
+    padding: 5px;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
 @media (min-width: 1200px) {
     .events-map-card #map {
         min-height: 430px;
