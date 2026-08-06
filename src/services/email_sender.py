@@ -29,6 +29,9 @@ def email_sender(event_id, parsed_data):
         os.path.join(products_path, "pga.jpg"),
         os.path.join(products_path, "pgv.jpg"),
         os.path.join(products_path, "intensity.jpg"),
+        os.path.join(products_path, "psa03.jpg"),
+        os.path.join(products_path, "psa10.jpg"),
+        os.path.join(products_path, "psa30.jpg"),
     ]
 
     # მხოლოდ არსებული ფაილები
