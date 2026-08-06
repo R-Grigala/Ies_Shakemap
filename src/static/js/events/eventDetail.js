@@ -264,15 +264,18 @@ function getDetailMapEventPayload() {
 
 async function initEventDetailMap(force = false) {
   if (eventDetailMapInitialized && !force) {
-    if (window.ShakeMap && window.ShakeMap.map) {
-      window.ShakeMap.map.invalidateSize();
+    if (window.ShakeMap && window.ShakeMap.map && typeof google !== "undefined" && google.maps) {
+      google.maps.event.trigger(window.ShakeMap.map, "resize");
     }
     return;
   }
-  if (typeof window.initShakeMapMap !== "function" && typeof window.initMap !== "function") {
+  if (typeof window.initShakeMapMap !== "function") {
     return;
   }
-  if (typeof L === "undefined") {
+  if (typeof window.isGoogleMapsReady === "function" && !window.isGoogleMapsReady()) {
+    return;
+  }
+  if (typeof google === "undefined" || !google.maps) {
     return;
   }
 
@@ -285,8 +288,7 @@ async function initEventDetailMap(force = false) {
     return;
   }
 
-  const initFn = window.initShakeMapMap || window.initMap;
-  await initFn(eventPayload);
+  await window.initShakeMapMap(eventPayload);
   eventDetailMapInitialized = true;
 }
 
@@ -554,16 +556,35 @@ async function onTogglePublishClick() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Helpers used on /events list; full detail UI only on /events/<oid>.
+  const isDetailPage = Boolean(document.getElementById("shakemapStaticView"));
+  if (!isDetailPage) {
+    return;
+  }
+
   loadShakemapStaticView();
   bindEventDetailMapTab();
   initDetailStatusActions();
-  // Map is the default active tab — init after Leaflet (defer) is ready.
-  const tryInit = () => {
-    if (typeof L !== "undefined") {
+
+  // Map tab — wait for Google Maps API (from base.html).
+  const tryInit = (attemptsLeft = 100) => {
+    const mapsReady =
+      typeof window.isGoogleMapsReady === "function"
+        ? window.isGoogleMapsReady()
+        : typeof google !== "undefined" && !!google.maps;
+    if (mapsReady && typeof window.initShakeMapMap === "function") {
       initEventDetailMap(false);
       return;
     }
-    window.setTimeout(tryInit, 50);
+    if (attemptsLeft <= 0) {
+      const layerList = document.getElementById("layer-list");
+      if (layerList) {
+        layerList.innerHTML =
+          '<div class="text-danger small">Google Maps failed to load; map unavailable. Check GOOGLE_MAPS_API_KEY.</div>';
+      }
+      return;
+    }
+    window.setTimeout(() => tryInit(attemptsLeft - 1), 50);
   };
   tryInit();
 });
