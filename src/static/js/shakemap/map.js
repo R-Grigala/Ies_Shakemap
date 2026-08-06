@@ -1,20 +1,23 @@
 /**
- * ShakeMap Leaflet map — products resolved per event via API:
+ * ShakeMap Google Maps layer view — products per event via API:
  *   /api/shakemap/<seiscomp_oid>/product/<filename>
  *
- * Server files live under:
+ * Server files:
  *   {SHAKEMAP_BASE_PATH}/<seiscomp_oid>/current/products/
+ *
+ * Uses the same Google Maps JS API as src/static/js/events/map.js
  */
 
 const ShakeMap = window.ShakeMap || {
   map: null,
-  basemapLayers: {},
+  infoWindow: null,
+  epicenterMarker: null,
   currentLayers: {},
-  activeBasemap: "street",
+  activeBasemap: "satellite",
+  legendEl: null,
 };
 window.ShakeMap = ShakeMap;
 
-/** USGS MMI color ramp (index ~ intensity 0–10) */
 const intColors_USGS = [
   "#FFFFFF",
   "#FFFFFF",
@@ -29,6 +32,8 @@ const intColors_USGS = [
   "#800080",
 ];
 
+const DATA_LAYER_KEYS = ["Intensity", "PGA", "PGV", "PSA 0.3s", "PSA 1.0s", "PSA 3.0s"];
+
 function formatUnit(unit) {
   if (!unit) {
     return "";
@@ -40,11 +45,6 @@ function formatUnit(unit) {
   return value;
 }
 
-/**
- * Product URL for a specific SeisComP event.
- * @param {string} seiscompOid
- * @param {string} filename e.g. cont_pga.json, stationlist.json
- */
 function getShakemapProductUrl(seiscompOid, filename) {
   const oid = encodeURIComponent(seiscompOid);
   const file = encodeURIComponent(filename);
@@ -61,16 +61,243 @@ function resolveSeiscompOid(event) {
   return String(event.seiscomp_oid || event.id || "").trim();
 }
 
+function isGoogleMapsReady() {
+  return typeof google !== "undefined" && google.maps && typeof google.maps.Map === "function";
+}
+
+function clearShakeMapOverlays() {
+  Object.values(ShakeMap.currentLayers || {}).forEach((layer) => {
+    if (!layer) {
+      return;
+    }
+    if (layer.type === "data" && layer.data) {
+      layer.data.setMap(null);
+    } else if (layer.type === "markers" && Array.isArray(layer.markers)) {
+      layer.markers.forEach((marker) => marker.setMap(null));
+    } else if (layer.type === "legend" && layer.el) {
+      layer.el.remove();
+    }
+  });
+  ShakeMap.currentLayers = {};
+
+  if (ShakeMap.epicenterMarker) {
+    ShakeMap.epicenterMarker.setMap(null);
+    ShakeMap.epicenterMarker = null;
+  }
+  if (ShakeMap.infoWindow) {
+    ShakeMap.infoWindow.close();
+  }
+}
+
+function openInfoWindow(position, html) {
+  if (!ShakeMap.map) {
+    return;
+  }
+  if (!ShakeMap.infoWindow) {
+    ShakeMap.infoWindow = new google.maps.InfoWindow();
+  }
+  ShakeMap.infoWindow.setContent(html);
+  ShakeMap.infoWindow.setPosition(position);
+  ShakeMap.infoWindow.open({ map: ShakeMap.map });
+}
+
+function stationPopupHtml(feature) {
+  const props = feature.properties || {};
+  const code = props.code || props.id || "Unknown";
+  const network = props.network || (props.name ? String(props.name).split(".")[0] : "N/A");
+  const stationName = String(code).includes(".")
+    ? String(code).split(".").slice(1).join(".")
+    : code;
+
+  const formatNumber = (val, decimals) => {
+    return val !== null && val !== undefined && !Number.isNaN(Number(val))
+      ? Number(val).toFixed(decimals)
+      : "N/A";
+  };
+
+  return `
+    <div style="font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
+      <strong>Station:</strong> ${stationName}<br>
+      <strong>Network:</strong> ${network}<br>
+      <strong>Type:</strong> ${props.station_type || "N/A"}<br>
+      <strong>Distance:</strong> ${formatNumber(props.distance, 3)} km<br>
+      <strong>Intensity:</strong> ${formatNumber(props.intensity, 1)}<br>
+      <strong>PGA:</strong> ${formatNumber(props.pga, 4)}<br>
+      <strong>PGV:</strong> ${formatNumber(props.pgv, 4)}<br>
+      <strong>Vs30:</strong> ${
+        props.vs30 && !Number.isNaN(Number(props.vs30)) ? Math.round(props.vs30) : "N/A"
+      } m/s
+    </div>
+  `;
+}
+
+function contourPopupHtml(layerName, feature) {
+  const props = feature.properties || {};
+  if (props.value == null) {
+    return null;
+  }
+  let label = layerName;
+  let unit = formatUnit(props.units || "");
+  if (layerName.includes("Intensity")) {
+    label = "Intensity";
+    if (unit.toLowerCase() === "mmi") {
+      unit = "";
+    }
+  }
+  return `${label}: ${props.value} ${unit}`.trim();
+}
+
+function geoPointToLatLng(geometry) {
+  if (!geometry || !geometry.coordinates) {
+    return null;
+  }
+  // GeoJSON Point: [lon, lat]
+  return { lat: Number(geometry.coordinates[1]), lng: Number(geometry.coordinates[0]) };
+}
+
+function styleContourDataLayer(dataLayer, fallbackColor) {
+  dataLayer.setStyle((feature) => {
+    const color = feature.getProperty("color") || fallbackColor;
+    const weight = Number(feature.getProperty("weight")) || 2;
+    return {
+      strokeColor: color,
+      strokeOpacity: 1,
+      strokeWeight: weight,
+      fillOpacity: 0,
+      clickable: true,
+    };
+  });
+}
+
 /**
- * Initialize the ShakeMap Leaflet map for an event.
+ * Create a Google Maps Data layer for contour GeoJSON.
+ * visible=false keeps data loaded but not shown.
+ */
+function createDataContourLayer(geojson, fallbackColor, layerName, visible) {
+  const dataLayer = new google.maps.Data({ map: visible ? ShakeMap.map : null });
+  dataLayer.addGeoJson(geojson);
+  styleContourDataLayer(dataLayer, fallbackColor);
+
+  dataLayer.addListener("click", (event) => {
+    const props = {};
+    event.feature.forEachProperty((value, key) => {
+      props[key] = value;
+    });
+    const html = contourPopupHtml(layerName, { properties: props });
+    if (html) {
+      openInfoWindow(event.latLng, html);
+    }
+  });
+
+  return { type: "data", data: dataLayer, visible };
+}
+
+function setLayerVisible(layer, visible) {
+  if (!layer) {
+    return;
+  }
+  layer.visible = visible;
+  if (layer.type === "data" && layer.data) {
+    layer.data.setMap(visible ? ShakeMap.map : null);
+  } else if (layer.type === "markers" && Array.isArray(layer.markers)) {
+    layer.markers.forEach((marker) => marker.setMap(visible ? ShakeMap.map : null));
+  } else if (layer.type === "legend" && layer.el) {
+    layer.el.style.display = visible ? "block" : "none";
+  }
+}
+
+function appendLayerControl(layerList, name, inputType, groupName, checked, onChangeCall) {
+  if (!layerList) {
+    return;
+  }
+  const div = document.createElement("div");
+  div.innerHTML = `
+    <label>
+      <input type="${inputType}" ${groupName ? `name="${groupName}"` : ""} ${
+    checked ? "checked" : ""
+  } onchange="${onChangeCall}">
+      ${name}
+    </label>
+  `;
+  layerList.appendChild(div);
+}
+
+function stationFillColor(feature) {
+  const props = feature.properties || {};
+  let stationColorIndex = 1;
+  let useComplexLogic = false;
+
+  if (props.mmi_from_pgm && Array.isArray(props.mmi_from_pgm)) {
+    try {
+      if (props.intensity < 5) {
+        const result = props.mmi_from_pgm.find((obj) => obj.name === "pga");
+        if (result) {
+          stationColorIndex = Math.round(result.value);
+          useComplexLogic = true;
+        }
+      } else {
+        const result = props.mmi_from_pgm.find((obj) => obj.name === "pgv");
+        if (result) {
+          stationColorIndex = Math.round(result.value);
+          useComplexLogic = true;
+        }
+      }
+    } catch (err) {
+      console.warn("Error in station color logic", err);
+    }
+  }
+
+  if (!useComplexLogic) {
+    stationColorIndex = Math.round(props.intensity || 1);
+  }
+  return intColors_USGS[stationColorIndex] || "#FFFFFF";
+}
+
+function triangleIcon(fillColor) {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="12" viewBox="0 0 14 12">
+      <polygon points="7,0 14,12 0,12" fill="#000"/>
+      <polygon points="7,2 13,12 1,12" fill="${fillColor}"/>
+    </svg>
+  `.trim();
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(14, 12),
+    anchor: new google.maps.Point(7, 12),
+  };
+}
+
+function circleIcon(fillColor) {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6" r="5" fill="${fillColor}" stroke="#000" stroke-width="1"/>
+    </svg>
+  `.trim();
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(12, 12),
+    anchor: new google.maps.Point(6, 6),
+  };
+}
+
+/**
  * @param {Object} event - { seiscomp_oid, latitude|lat, longitude|lon }
  * @param {Object} options
  */
 async function initShakeMapMap(event, options = {}) {
   const mapEl = document.getElementById(options.mapElementId || "shakemap-map");
   const layerList = document.getElementById(options.layerListId || "layer-list");
-  if (!mapEl || typeof L === "undefined") {
-    console.warn("ShakeMap map: Leaflet container or L is missing");
+
+  if (!mapEl) {
+    console.warn("ShakeMap map: container #shakemap-map missing");
+    return;
+  }
+  if (!isGoogleMapsReady()) {
+    console.warn("ShakeMap map: Google Maps API is not loaded");
+    if (layerList) {
+      layerList.innerHTML =
+        '<div class="text-danger small">Google Maps API is not available. Check GOOGLE_MAPS_API_KEY.</div>';
+    }
     return;
   }
 
@@ -85,17 +312,14 @@ async function initShakeMapMap(event, options = {}) {
   }
 
   const productUrl = (filename) => getShakemapProductUrl(seiscompOid, filename);
-  const selectedBasemap = ShakeMap.activeBasemap || "street";
+  const selectedBasemap = ShakeMap.activeBasemap || "satellite";
 
-  if (ShakeMap.map) {
-    ShakeMap.map.remove();
-    ShakeMap.map = null;
-  }
+  clearShakeMapOverlays();
 
-  let bounds = [
-    [lat - 0.5, lon - 0.5],
-    [lat + 0.5, lon + 0.5],
-  ];
+  let bounds = new google.maps.LatLngBounds(
+    { lat: lat - 0.5, lng: lon - 0.5 },
+    { lat: lat + 0.5, lng: lon + 0.5 }
+  );
 
   try {
     const infoRes = await fetch(productUrl("info.json"));
@@ -108,10 +332,10 @@ async function initShakeMapMap(event, options = {}) {
         const maxLat = parseFloat(mapInfo.max.latitude);
         const maxLon = parseFloat(mapInfo.max.longitude);
         if (![minLat, minLon, maxLat, maxLon].some(Number.isNaN)) {
-          bounds = [
-            [minLat, minLon],
-            [maxLat, maxLon],
-          ];
+          bounds = new google.maps.LatLngBounds(
+            { lat: minLat, lng: minLon },
+            { lat: maxLat, lng: maxLon }
+          );
         }
       }
     }
@@ -119,40 +343,56 @@ async function initShakeMapMap(event, options = {}) {
     console.warn("Could not load info.json for bounds", e);
   }
 
-  ShakeMap.map = L.map(mapEl).fitBounds(bounds);
+  const mapTypeId =
+    selectedBasemap === "street"
+      ? google.maps.MapTypeId.ROADMAP
+      : google.maps.MapTypeId.HYBRID;
 
-  ShakeMap.basemapLayers = {
-    street: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors",
-    }),
-    satellite: L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      {
-        attribution:
-          "&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
-      }
-    ),
-  };
-
-  if (ShakeMap.basemapLayers[selectedBasemap]) {
-    ShakeMap.basemapLayers[selectedBasemap].addTo(ShakeMap.map);
+  if (ShakeMap.map) {
+    ShakeMap.map.setOptions({
+      center: { lat, lng: lon },
+      mapTypeId,
+      streetViewControl: false,
+      fullscreenControl: true,
+      mapTypeControl: false,
+    });
   } else {
-    ShakeMap.basemapLayers.street.addTo(ShakeMap.map);
-    ShakeMap.activeBasemap = "street";
+    ShakeMap.map = new google.maps.Map(mapEl, {
+      center: { lat, lng: lon },
+      zoom: 8,
+      mapTypeId,
+      panControl: false,
+      streetViewControl: false,
+      mapTypeControl: false,
+      zoomControl: true,
+      fullscreenControl: true,
+    });
   }
 
-  const epicenterIcon = L.divIcon({
-    className: "epicenter-marker",
-    html: `<div class="epicenter-container">
-                <div class="epicenter-pulse"></div>
-                <div class="epicenter-pulse pulse-2"></div>
-                <div class="epicenter-star" aria-hidden="true">★</div>
-              </div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-  });
+  ShakeMap.map.fitBounds(bounds);
+  ShakeMap.infoWindow = new google.maps.InfoWindow();
 
-  L.marker([lat, lon], { icon: epicenterIcon }).addTo(ShakeMap.map).bindPopup("Epicenter");
+  // Epicenter marker
+  const epicSvg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+      <circle cx="14" cy="14" r="12" fill="none" stroke="#dc3545" stroke-width="2" opacity="0.55"/>
+      <circle cx="14" cy="14" r="5" fill="#dc3545" stroke="#fff" stroke-width="1.5"/>
+    </svg>
+  `.trim();
+  ShakeMap.epicenterMarker = new google.maps.Marker({
+    position: { lat, lng: lon },
+    map: ShakeMap.map,
+    title: "Epicenter",
+    zIndex: 1000,
+    icon: {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(epicSvg)}`,
+      scaledSize: new google.maps.Size(28, 28),
+      anchor: new google.maps.Point(14, 14),
+    },
+  });
+  ShakeMap.epicenterMarker.addListener("click", () => {
+    openInfoWindow({ lat, lng: lon }, "<strong>Epicenter</strong>");
+  });
 
   if (layerList) {
     layerList.innerHTML = "";
@@ -163,27 +403,23 @@ async function initShakeMapMap(event, options = {}) {
     const basemapDiv = document.createElement("div");
     basemapDiv.className = "shakemap-layer-group";
     basemapDiv.innerHTML = `
-        <label class="d-block mb-2">
-            <input type="radio" name="basemap" value="street" ${
-              selectedBasemap === "street" ? "checked" : ""
-            } onchange="switchBasemap('street')">
-            Street
-        </label>
-        <label class="d-block mb-2">
-            <input type="radio" name="basemap" value="satellite" ${
-              selectedBasemap === "satellite" ? "checked" : ""
-            } onchange="switchBasemap('satellite')">
-            Satellite
-        </label>
+      <label class="d-block mb-2">
+        <input type="radio" name="basemap" value="street" ${
+          selectedBasemap === "street" ? "checked" : ""
+        } onchange="switchBasemap('street')">
+        Street
+      </label>
+      <label class="d-block mb-2">
+        <input type="radio" name="basemap" value="satellite" ${
+          selectedBasemap === "satellite" ? "checked" : ""
+        } onchange="switchBasemap('satellite')">
+        Satellite
+      </label>
     `;
     layerList.appendChild(basemapDiv);
-
-    const separator = document.createElement("hr");
-    separator.className = "my-3";
-    layerList.appendChild(separator);
+    layerList.appendChild(Object.assign(document.createElement("hr"), { className: "my-3" }));
   }
 
-  const DATA_LAYER_GROUP = "datalayer";
   const dataLayers = [
     { name: "Intensity", file: "cont_mi.json", color: "#ff0000" },
     { name: "PGA", file: "cont_pga.json", color: "#0000ff" },
@@ -193,189 +429,115 @@ async function initShakeMapMap(event, options = {}) {
     { name: "PSA 3.0s", file: "cont_psa3p0.json", color: "#a52a2a" },
   ];
 
-  const addLayer = async (name, filename, color, inputType = "checkbox", groupName = null, checked = false) => {
-    try {
-      const res = await fetch(productUrl(filename));
-      if (!res.ok) {
-        return;
-      }
-      const geojson = await res.json();
-
-      const layer = L.geoJSON(geojson, {
-        style: function (feature) {
-          return {
-            color: feature.properties?.color || color,
-            weight: feature.properties?.weight || 2,
-            opacity: 1,
-          };
-        },
-        onEachFeature: function (feature, featureLayer) {
-          if (feature.properties && feature.properties.value != null) {
-            let label = name;
-            let val = feature.properties.value;
-            let unit = formatUnit(feature.properties.units || "");
-
-            if (name.includes("Intensity")) {
-              label = "Intensity";
-              if (unit.toLowerCase() === "mmi") {
-                unit = "";
-              }
-            }
-
-            featureLayer.bindPopup(`${label}: ${val} ${unit}`.trim());
-          }
-        },
-      });
-
-      if (checked) {
-        layer.addTo(ShakeMap.map);
-      }
-      ShakeMap.currentLayers[name] = layer;
-
-      if (!layerList) {
-        return;
-      }
-
-      const div = document.createElement("div");
-      const onChangeCall =
-        inputType === "radio" ? `switchDataLayer('${name}')` : `toggleLayer('${name}')`;
-
-      div.innerHTML = `
-                <label>
-                    <input type="${inputType}" ${groupName ? `name="${groupName}"` : ""} ${
-        checked ? "checked" : ""
-      } onchange="${onChangeCall}">
-                    ${name}
-                </label>
-            `;
-      layerList.appendChild(div);
-    } catch (e) {
-      console.warn(`Failed to load layer ${name}`, e);
-    }
-  };
-
   for (let i = 0; i < dataLayers.length; i++) {
     const item = dataLayers[i];
-    await addLayer(item.name, item.file, item.color, "radio", DATA_LAYER_GROUP, i === 0);
+    const checked = i === 0;
+    try {
+      const res = await fetch(productUrl(item.file));
+      if (!res.ok) {
+        continue;
+      }
+      const geojson = await res.json();
+      const layer = createDataContourLayer(geojson, item.color, item.name, checked);
+      ShakeMap.currentLayers[item.name] = layer;
+      appendLayerControl(
+        layerList,
+        item.name,
+        "radio",
+        "datalayer",
+        checked,
+        `switchDataLayer('${item.name}')`
+      );
+    } catch (e) {
+      console.warn(`Failed to load layer ${item.name}`, e);
+    }
   }
 
   if (layerList) {
-    const separator2 = document.createElement("hr");
-    separator2.className = "my-3";
-    layerList.appendChild(separator2);
+    layerList.appendChild(Object.assign(document.createElement("hr"), { className: "my-3" }));
   }
 
+  // Stations
   try {
     const res = await fetch(productUrl("stationlist.json"));
     if (res.ok) {
       const geojson = await res.json();
+      const features = Array.isArray(geojson.features) ? geojson.features : [];
 
-      const macroseismicLayer = L.geoJSON(geojson, {
-        filter: function (feature) {
-          return feature.properties?.station_type === "macroseismic";
-        },
-        pointToLayer: function (feature, latlng) {
-          const stationColorIndex = Math.round(feature.properties.intensity);
-          const color = intColors_USGS[stationColorIndex] || "black";
-          return L.circleMarker(latlng, {
-            radius: 4,
-            fillColor: color,
-            color: "black",
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 1,
-          });
-        },
-        onEachFeature: function (feature, featureLayer) {
-          bindStationPopup(feature, featureLayer);
-        },
-      });
+      const macroFeatures = features.filter((f) => f.properties?.station_type === "macroseismic");
+      const seismicFeatures = features.filter((f) => f.properties?.station_type !== "macroseismic");
 
-      ShakeMap.currentLayers.Macroseismic = macroseismicLayer;
-      if (layerList && macroseismicLayer.getLayers().length > 0) {
+      if (macroFeatures.length > 0) {
         const autoEnable = options.enableMacroseismic === true;
-        if (autoEnable) {
-          macroseismicLayer.addTo(ShakeMap.map);
-        }
-        const div = document.createElement("div");
-        div.innerHTML = `
-                    <label>
-                        <input type="checkbox" ${
-                          autoEnable ? "checked" : ""
-                        } onchange="toggleLayer('Macroseismic')">
-                        Show Reported Intensity
-                    </label>
-                `;
-        layerList.appendChild(div);
+        const markers = macroFeatures
+          .map((feature) => {
+            const pos = geoPointToLatLng(feature.geometry);
+            if (!pos || Number.isNaN(pos.lat) || Number.isNaN(pos.lng)) {
+              return null;
+            }
+            const idx = Math.round(feature.properties?.intensity || 0);
+            const color = intColors_USGS[idx] || "black";
+            const marker = new google.maps.Marker({
+              position: pos,
+              map: autoEnable ? ShakeMap.map : null,
+              icon: circleIcon(color),
+              title: feature.properties?.code || "Macroseismic",
+            });
+            marker.addListener("click", () => openInfoWindow(pos, stationPopupHtml(feature)));
+            return marker;
+          })
+          .filter(Boolean);
+
+        ShakeMap.currentLayers.Macroseismic = {
+          type: "markers",
+          markers,
+          visible: autoEnable,
+        };
+        appendLayerControl(
+          layerList,
+          "Show Reported Intensity",
+          "checkbox",
+          null,
+          autoEnable,
+          "toggleLayer('Macroseismic')"
+        );
       }
 
-      const seismicLayer = L.geoJSON(geojson, {
-        filter: function (feature) {
-          return feature.properties?.station_type !== "macroseismic";
-        },
-        pointToLayer: function (feature, latlng) {
-          let stationColorIndex = 1;
-          let useComplexLogic = false;
-
-          if (feature.properties.mmi_from_pgm && Array.isArray(feature.properties.mmi_from_pgm)) {
-            try {
-              if (feature.properties.intensity < 5) {
-                const result = feature.properties.mmi_from_pgm.find((obj) => obj.name === "pga");
-                if (result) {
-                  stationColorIndex = Math.round(result.value);
-                  useComplexLogic = true;
-                }
-              } else {
-                const result = feature.properties.mmi_from_pgm.find((obj) => obj.name === "pgv");
-                if (result) {
-                  stationColorIndex = Math.round(result.value);
-                  useComplexLogic = true;
-                }
-              }
-            } catch (err) {
-              console.warn("Error in station color logic", err);
+      if (seismicFeatures.length > 0) {
+        const markers = seismicFeatures
+          .map((feature) => {
+            const pos = geoPointToLatLng(feature.geometry);
+            if (!pos || Number.isNaN(pos.lat) || Number.isNaN(pos.lng)) {
+              return null;
             }
-          }
+            const fill = stationFillColor(feature);
+            const marker = new google.maps.Marker({
+              position: pos,
+              map: null,
+              icon: triangleIcon(fill),
+              title: feature.properties?.code || "Station",
+            });
+            marker.addListener("click", () => openInfoWindow(pos, stationPopupHtml(feature)));
+            return marker;
+          })
+          .filter(Boolean);
 
-          if (!useComplexLogic) {
-            stationColorIndex = Math.round(feature.properties.intensity || 1);
-          }
-
-          const fillColor = intColors_USGS[stationColorIndex] || "#FFFFFF";
-          const triangleIcon = L.divIcon({
-            className: "triangle-marker",
-            html: `<svg width="14" height="12" viewBox="0 0 14 12" xmlns="http://www.w3.org/2000/svg"
-                            style="display: block; overflow: visible; pointer-events: none;" aria-hidden="true">
-                            <polygon points="7,0 14,12 0,12" fill="#000" style="pointer-events: none;" />
-                            <polygon points="7,2 13,12 1,12" fill="${fillColor}" style="pointer-events: none;" />
-                        </svg>`,
-            iconSize: [14, 12],
-            iconAnchor: [7, 12],
-          });
-
-          return L.marker(latlng, { icon: triangleIcon });
-        },
-        onEachFeature: function (feature, featureLayer) {
-          bindStationPopup(feature, featureLayer);
-        },
-      });
-
-      ShakeMap.currentLayers.Stations = seismicLayer;
-      if (layerList) {
-        const divSt = document.createElement("div");
-        divSt.innerHTML = `
-                    <label>
-                        <input type="checkbox" onchange="toggleLayer('Stations')">
-                        Show Stations
-                    </label>
-                `;
-        layerList.appendChild(divSt);
+        ShakeMap.currentLayers.Stations = { type: "markers", markers, visible: false };
+        appendLayerControl(
+          layerList,
+          "Show Stations",
+          "checkbox",
+          null,
+          false,
+          "toggleLayer('Stations')"
+        );
       }
     }
   } catch (e) {
     console.warn("Failed to load stations", e);
   }
 
+  // Fault / rupture
   try {
     const ruptureRes = await fetch(productUrl("rupture.json"));
     if (ruptureRes.ok) {
@@ -383,160 +545,95 @@ async function initShakeMapMap(event, options = {}) {
       let isValidFault = false;
       if (ruptureJson.features && ruptureJson.features.length > 0) {
         const geometry = ruptureJson.features[0].geometry;
-        if (geometry && geometry.coordinates && Array.isArray(geometry.coordinates)) {
+        if (geometry?.coordinates && Array.isArray(geometry.coordinates)) {
           if (Array.isArray(geometry.coordinates[0])) {
             isValidFault = true;
           }
         }
       }
-
       if (isValidFault) {
-        const ruptureLayer = L.geoJSON(ruptureJson, {
-          style: { color: "black", weight: 3, opacity: 1 },
+        const dataLayer = new google.maps.Data({ map: null });
+        dataLayer.addGeoJson(ruptureJson);
+        dataLayer.setStyle({
+          strokeColor: "#000000",
+          strokeWeight: 3,
+          strokeOpacity: 1,
+          fillOpacity: 0,
         });
-        ShakeMap.currentLayers.Fault = ruptureLayer;
-        if (layerList) {
-          const divFault = document.createElement("div");
-          divFault.innerHTML = `
-                    <label>
-                        <input type="checkbox" onchange="toggleLayer('Fault')">
-                        Show fault
-                    </label>
-                `;
-          layerList.appendChild(divFault);
-        }
+        ShakeMap.currentLayers.Fault = { type: "data", data: dataLayer, visible: false };
+        appendLayerControl(layerList, "Show fault", "checkbox", null, false, "toggleLayer('Fault')");
       }
     }
   } catch (e) {
     console.warn("Failed to load rupture.json", e);
   }
 
+  // Legend image overlay
   let legendExists = false;
   try {
     const legendRes = await fetch(productUrl("mmi_legend.png"), { method: "HEAD" });
     if (legendRes.ok) {
-      L.Control.Legend = L.Control.extend({
-        onAdd: function () {
-          const div = L.DomUtil.create("div", "legend-control");
-          div.innerHTML = `<img src="${productUrl(
-            "mmi_legend.png"
-          )}" alt="MMI Legend" class="shakemap-legend-img">`;
-          return div;
-        },
-      });
-      L.control.legend = function (opts) {
-        return new L.Control.Legend(opts);
-      };
-      const legendControl = L.control.legend({ position: "bottomleft" });
-      legendControl.addTo(ShakeMap.map);
-      ShakeMap.currentLayers.Legend = legendControl;
+      const legendEl = document.createElement("div");
+      legendEl.className = "shakemap-gmap-legend";
+      legendEl.innerHTML = `<img src="${productUrl(
+        "mmi_legend.png"
+      )}" alt="MMI Legend" class="shakemap-legend-img">`;
+      mapEl.style.position = mapEl.style.position || "relative";
+      mapEl.appendChild(legendEl);
+
+      ShakeMap.currentLayers.Legend = { type: "legend", el: legendEl, visible: true };
       legendExists = true;
     }
   } catch (e) {
     console.warn("Failed to load legend", e);
   }
 
-  if (layerList) {
-    const div = document.createElement("div");
-    div.innerHTML = `
-        <label>
-            <input type="checkbox" ${legendExists ? "checked" : ""} onchange="toggleLayer('Legend')">
-            Show Legend
-        </label>
-    `;
-    layerList.appendChild(div);
-  }
+  appendLayerControl(
+    layerList,
+    "Show Legend",
+    "checkbox",
+    null,
+    legendExists,
+    "toggleLayer('Legend')"
+  );
 
-  // leaflet needs invalidateSize when shown in a hidden tab
+  // Trigger resize after tab layout
   setTimeout(() => {
     if (ShakeMap.map) {
-      ShakeMap.map.invalidateSize();
+      google.maps.event.trigger(ShakeMap.map, "resize");
+      ShakeMap.map.fitBounds(bounds);
     }
-  }, 100);
-}
-
-function bindStationPopup(feature, layer) {
-  if (!feature.properties) {
-    return;
-  }
-  const props = feature.properties;
-  const code = props.code || props.id || "Unknown";
-  const network = props.network || props.name?.split(".")[0] || "N/A";
-  const stationName = code.includes(".") ? code.split(".").slice(1).join(".") : code;
-
-  const formatNumber = (val, decimals) => {
-    return val !== null && val !== undefined && !Number.isNaN(Number(val))
-      ? Number(val).toFixed(decimals)
-      : "N/A";
-  };
-
-  layer.bindPopup(`
-            <div style="font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
-                <strong>Station:</strong> ${stationName}<br>
-                <strong>Network:</strong> ${network}<br>
-                <strong>Type:</strong> ${props.station_type || "N/A"}<br>
-                <strong>Distance:</strong> ${formatNumber(props.distance, 3)} km<br>
-                <strong>Intensity:</strong> ${formatNumber(props.intensity, 1)}<br>
-                <strong>PGA:</strong> ${formatNumber(props.pga, 4)}<br>
-                <strong>PGV:</strong> ${formatNumber(props.pgv, 4)}<br>
-                <strong>Vs30:</strong> ${
-                  props.vs30 && !Number.isNaN(Number(props.vs30)) ? Math.round(props.vs30) : "N/A"
-                } m/s
-            </div>
-        `);
+  }, 150);
 }
 
 window.switchDataLayer = function (selectedName) {
-  const dataKeys = ["Intensity", "PGA", "PGV", "PSA 0.3s", "PSA 1.0s", "PSA 3.0s"];
-  dataKeys.forEach((name) => {
-    if (!ShakeMap.currentLayers[name] || !ShakeMap.map) {
+  DATA_LAYER_KEYS.forEach((name) => {
+    const layer = ShakeMap.currentLayers[name];
+    if (!layer) {
       return;
     }
-    if (name === selectedName) {
-      if (!ShakeMap.map.hasLayer(ShakeMap.currentLayers[name])) {
-        ShakeMap.map.addLayer(ShakeMap.currentLayers[name]);
-      }
-    } else if (ShakeMap.map.hasLayer(ShakeMap.currentLayers[name])) {
-      ShakeMap.map.removeLayer(ShakeMap.currentLayers[name]);
-    }
+    setLayerVisible(layer, name === selectedName);
   });
 };
 
 window.toggleLayer = function (name) {
-  if (!ShakeMap.currentLayers[name] || !ShakeMap.map) {
+  const layer = ShakeMap.currentLayers[name];
+  if (!layer) {
     return;
   }
-  if (ShakeMap.currentLayers[name] instanceof L.Control) {
-    const container = ShakeMap.currentLayers[name].getContainer();
-    if (container && container.parentNode) {
-      ShakeMap.map.removeControl(ShakeMap.currentLayers[name]);
-    } else {
-      ShakeMap.currentLayers[name].addTo(ShakeMap.map);
-    }
-  } else if (ShakeMap.map.hasLayer(ShakeMap.currentLayers[name])) {
-    ShakeMap.map.removeLayer(ShakeMap.currentLayers[name]);
-  } else {
-    ShakeMap.map.addLayer(ShakeMap.currentLayers[name]);
-  }
+  setLayerVisible(layer, !layer.visible);
 };
 
 window.switchBasemap = function (basemapType) {
   ShakeMap.activeBasemap = basemapType;
-  if (!ShakeMap.map || !ShakeMap.basemapLayers) {
+  if (!ShakeMap.map || !isGoogleMapsReady()) {
     return;
   }
-  Object.values(ShakeMap.basemapLayers).forEach((layer) => {
-    if (ShakeMap.map.hasLayer(layer)) {
-      ShakeMap.map.removeLayer(layer);
-    }
-  });
-  if (ShakeMap.basemapLayers[basemapType]) {
-    ShakeMap.basemapLayers[basemapType].addTo(ShakeMap.map);
-  }
+  ShakeMap.map.setMapTypeId(
+    basemapType === "street" ? google.maps.MapTypeId.ROADMAP : google.maps.MapTypeId.HYBRID
+  );
 };
 
-// Prefer project name; keep initMap alias for older call sites.
 window.initShakeMapMap = initShakeMapMap;
-window.initMap = initShakeMapMap;
 window.getShakemapProductUrl = getShakemapProductUrl;
-window.bindStationPopup = bindStationPopup;
+window.isGoogleMapsReady = isGoogleMapsReady;
