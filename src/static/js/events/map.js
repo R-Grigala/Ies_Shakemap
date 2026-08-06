@@ -60,7 +60,7 @@ function formatMapValue(value, fallback) {
 }
 
 /**
- * Marker popup content: event summary + "დეტალურად" link to eventDetails.
+ * Marker popup: Location, Time, Magnitude + "დეტალურად".
  */
 function buildEventInfoWindowContent(event, detailUrl) {
     const location =
@@ -68,29 +68,11 @@ function buildEventInfoWindowContent(event, detailUrl) {
         event.location_en ||
         event.area ||
         "—";
-    const ml = event.ml != null && event.ml !== "" ? `${event.ml} ML` : "—";
-    const depth =
-        event.depth != null && event.depth !== "" ? `${event.depth} km` : "—";
-
-    const rows = [
-        ["Event ID", formatMapValue(event.event_id, formatMapValue(event.seiscomp_oid))],
-        ["SeisComP OID", formatMapValue(event.seiscomp_oid)],
-        ["Time", formatMapValue(event.origin_time)],
-        ["Magnitude", ml],
-        ["Depth", depth],
-        ["Lat / Lon", `${formatMapValue(event.latitude)}, ${formatMapValue(event.longitude)}`],
-        ["Location", location],
-    ];
-
-    const detailsHtml = rows
-        .map(
-            ([label, value]) => `
-            <div style="margin-bottom:4px;">
-              <span style="color:#6c757d;font-size:11px;">${escapeMapHtml(label)}</span><br>
-              <strong style="font-size:13px;">${escapeMapHtml(value)}</strong>
-            </div>`
-        )
-        .join("");
+    const time = formatMapValue(event.origin_time);
+    const ml =
+        event.ml != null && event.ml !== ""
+            ? `${event.ml} ML`
+            : "—";
 
     const buttonHtml = detailUrl
         ? `<a href="${escapeMapHtml(detailUrl)}"
@@ -103,10 +85,18 @@ function buildEventInfoWindowContent(event, detailUrl) {
 
     return `
       <div style="min-width:200px;max-width:280px;font-family:Arial,sans-serif;line-height:1.35;">
-        <div style="font-weight:700;font-size:14px;margin-bottom:8px;color:#212529;">
-          ${escapeMapHtml(location)}
+        <div style="margin-bottom:6px;">
+          <span style="color:#6c757d;font-size:11px;">Location</span><br>
+          <strong style="font-size:13px;">${escapeMapHtml(location)}</strong>
         </div>
-        ${detailsHtml}
+        <div style="margin-bottom:6px;">
+          <span style="color:#6c757d;font-size:11px;">Time</span><br>
+          <strong style="font-size:13px;">${escapeMapHtml(time)}</strong>
+        </div>
+        <div style="margin-bottom:6px;">
+          <span style="color:#6c757d;font-size:11px;">Magnitude</span><br>
+          <strong style="font-size:13px;">${escapeMapHtml(ml)}</strong>
+        </div>
         <div style="margin-top:6px;border-top:1px solid #e9ecef;padding-top:8px;text-align:center;">
           ${buttonHtml}
         </div>
