@@ -18,13 +18,14 @@ function initMap() {
 }
 
 function resolveEventDetailUrl(event) {
-    if (event == null || event.id === undefined || event.id === null || event.id === "") {
+    const oid = event && event.seiscomp_oid != null ? String(event.seiscomp_oid).trim() : "";
+    if (!oid) {
         return null;
     }
     if (typeof window.getEventDetailUrl === "function") {
-        return window.getEventDetailUrl(event.id);
+        return window.getEventDetailUrl(oid);
     }
-    return `/events/${encodeURIComponent(event.id)}`;
+    return `/events/${encodeURIComponent(oid)}`;
 }
 
 function buildMarkerTitle(event) {

@@ -13,10 +13,14 @@ def events():
     return render_template("events.html")
 
 
-@events_blueprint.route("/events/<int:event_id>")
-def event_detail(event_id):
-    """მიწისძვრის დეტალური გვერდი primary key id-ით."""
-    event = SeismicEvent.query.filter_by(id=event_id).first()
+@events_blueprint.route("/events/<string:seiscomp_oid>")
+def event_detail(seiscomp_oid):
+    """მიწისძვრის დეტალური გვერდი SeisComP OID-ით (მაგ. ies2026pjwh)."""
+    oid = (seiscomp_oid or "").strip()
+    if not oid:
+        abort(404)
+
+    event = SeismicEvent.query.filter_by(seiscomp_oid=oid).first()
     if not event:
         abort(404)
     return render_template("eventDetail.html", event=event)

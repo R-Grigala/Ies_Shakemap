@@ -1,29 +1,32 @@
 /**
  * Event detail page:
- * - list helpers (view button / id link)
- * - Static View (INTENSITY / PGA / PGV) for /events/<id>
+ * - list helpers (view button / id link by seiscomp_oid)
+ * - Static View (INTENSITY / PGA / PGV / PSA 0.3s / 1.0s / 3.0s) for /events/<seiscomp_oid>
  */
 
-const SHAKEMAP_STATIC_IMAGE_ORDER = ["intensity", "pga", "pgv"];
+const SHAKEMAP_STATIC_IMAGE_ORDER = ["intensity", "pga", "pgv", "psa03", "psa10", "psa30"];
 const SHAKEMAP_STATIC_IMAGE_LABELS = {
   intensity: "INTENSITY",
   pga: "PGA",
   pgv: "PGV",
+  psa03: "PSA 0.3s",
+  psa10: "PSA 1.0s",
+  psa30: "PSA 3.0s",
 };
 
 /** @type {Record<string, { type: string, filename: string, exists: boolean, url: string }>|null} */
 let shakemapImagesByType = null;
 let activeShakemapType = "intensity";
 
-function getEventDetailUrl(eventId) {
-  return `/events/${encodeURIComponent(eventId)}`;
+function getEventDetailUrl(seiscompOid) {
+  return `/events/${encodeURIComponent(seiscompOid)}`;
 }
 
-function buildViewEventButton(eventId) {
-  if (eventId === undefined || eventId === null || eventId === "") {
+function buildViewEventButton(seiscompOid) {
+  if (seiscompOid === undefined || seiscompOid === null || seiscompOid === "") {
     return "";
   }
-  const url = getEventDetailUrl(eventId);
+  const url = getEventDetailUrl(seiscompOid);
   return `
     <a
       href="${url}"
@@ -40,12 +43,12 @@ function buildViewEventButton(eventId) {
   `;
 }
 
-function buildEventIdLink(eventId, label) {
-  if (eventId === undefined || eventId === null || eventId === "") {
+function buildEventIdLink(seiscompOid, label) {
+  if (seiscompOid === undefined || seiscompOid === null || seiscompOid === "") {
     return eventDetailEscapeHtml(label ?? "-");
   }
   return `
-    <a href="${getEventDetailUrl(eventId)}" class="text-decoration-none">
+    <a href="${getEventDetailUrl(seiscompOid)}" class="text-decoration-none">
       ${eventDetailEscapeHtml(label ?? "-")}
     </a>
   `;
