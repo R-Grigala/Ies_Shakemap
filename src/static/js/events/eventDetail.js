@@ -4,14 +4,14 @@
  * - Static View (INTENSITY / PGA / PGV / PSA 0.3s / 1.0s / 3.0s) for /events/<seiscomp_oid>
  */
 
-const SHAKEMAP_STATIC_IMAGE_ORDER = ["intensity", "pga", "pgv", "psa03", "psa10", "psa30"];
+const SHAKEMAP_STATIC_IMAGE_ORDER = ["intensity", "pga", "pgv", "psa0p3", "psa1p0", "psa3p0"];
 const SHAKEMAP_STATIC_IMAGE_LABELS = {
   intensity: "INTENSITY",
   pga: "PGA",
   pgv: "PGV",
-  psa03: "PSA 0.3s",
-  psa10: "PSA 1.0s",
-  psa30: "PSA 3.0s",
+  psa0p3: "PSA 0.3s",
+  psa1p0: "PSA 1.0s",
+  psa3p0: "PSA 3.0s",
 };
 
 /** @type {Record<string, { type: string, filename: string, exists: boolean, url: string }>|null} */
