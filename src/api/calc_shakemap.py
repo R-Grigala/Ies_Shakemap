@@ -18,9 +18,9 @@ ALLOWED_IMAGES = {
     "intensity": "intensity.jpg",
     "pga": "pga.jpg",
     "pgv": "pgv.jpg",
-    "psa03": "psa03.jpg",  # PSA 0.3s
-    "psa10": "psa10.jpg",  # PSA 1.0s
-    "psa30": "psa30.jpg",  # PSA 3.0s
+    "psa0p3": "psa0p3.jpg",  # PSA 0.3s
+    "psa1p0": "psa1p0.jpg",  # PSA 1.0s
+    "psa3p0": "psa3p0.jpg",  # PSA 3.0s
 }
 
 
@@ -170,7 +170,7 @@ class ShakeMapResults(Resource):
 @shakemap_ns.doc(
     params={
         "seiscomp_oid": "SeisComP Event OID",
-        "image_type": "ShakeMap image type: intensity, pga, pgv, psa03 (0.3s), psa10 (1.0s), psa30 (3.0s)",
+        "image_type": "ShakeMap image type: intensity, pga, pgv, psa0p3 (0.3s), psa1p0 (1.0s), psa3p0 (3.0s)",
     },
     responses={
         200: 'OK',
