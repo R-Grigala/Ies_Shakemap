@@ -6,11 +6,11 @@ from src.commands import init_db, populate_db
 from src.extensions import db, migrate, jwt, api as restx_api
 from src.logger import configure_logging
 from src.models import User
-from src.views import shakemap_blueprint, auth_blueprint, accounts_blueprint, events_blueprint
+from src.views import auth_blueprint, accounts_blueprint, events_blueprint
 from src import api as api_package # ensure namespaces are imported
 
 # Register blueprints
-BLUEPRINTS = [shakemap_blueprint, auth_blueprint, accounts_blueprint, events_blueprint]
+BLUEPRINTS = [auth_blueprint, accounts_blueprint, events_blueprint]
 COMMANDS = [init_db, populate_db]
 
 

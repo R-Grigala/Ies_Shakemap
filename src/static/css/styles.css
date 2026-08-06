@@ -133,6 +133,13 @@ body {
     border-top: 1px solid var(--event-border);
 }
 
+.event-status-action {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
 .event-detail-tabs {
     border-bottom: 1px solid var(--event-border);
     gap: 0.25rem;

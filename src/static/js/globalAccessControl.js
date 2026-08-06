@@ -289,8 +289,6 @@ document.addEventListener("DOMContentLoaded", function() {
     const token = localStorage.getItem('access_token');
     const isPublicPage =
         currentPage === '/' ||
-        currentPage === '/shakemap' ||
-        currentPage.startsWith('/shakemap/') ||
         currentPage === '/events' ||
         currentPage.startsWith('/events/');
 
