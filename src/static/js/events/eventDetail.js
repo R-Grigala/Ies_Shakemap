@@ -248,6 +248,68 @@ window.buildEventIdLink = buildEventIdLink;
 window.loadShakemapStaticView = loadShakemapStaticView;
 window.showShakemapType = showShakemapType;
 
+let eventDetailMapInitialized = false;
+
+function getDetailMapEventPayload() {
+  const panel = document.getElementById("panel-map-view");
+  if (!panel) {
+    return null;
+  }
+  return {
+    seiscomp_oid: panel.dataset.seiscompOid || "",
+    latitude: panel.dataset.lat,
+    longitude: panel.dataset.lon,
+  };
+}
+
+async function initEventDetailMap(force = false) {
+  if (eventDetailMapInitialized && !force) {
+    if (window.ShakeMap && window.ShakeMap.map) {
+      window.ShakeMap.map.invalidateSize();
+    }
+    return;
+  }
+  if (typeof window.initShakeMapMap !== "function" && typeof window.initMap !== "function") {
+    return;
+  }
+  if (typeof L === "undefined") {
+    return;
+  }
+
+  const eventPayload = getDetailMapEventPayload();
+  if (!eventPayload || !eventPayload.seiscomp_oid) {
+    const layerList = document.getElementById("layer-list");
+    if (layerList) {
+      layerList.innerHTML = '<div class="text-muted small">SeisComP OID missing for map.</div>';
+    }
+    return;
+  }
+
+  const initFn = window.initShakeMapMap || window.initMap;
+  await initFn(eventPayload);
+  eventDetailMapInitialized = true;
+}
+
+function bindEventDetailMapTab() {
+  const mapTab = document.getElementById("tab-map-view");
+  if (!mapTab) {
+    return;
+  }
+  mapTab.addEventListener("shown.bs.tab", () => {
+    initEventDetailMap(false);
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   loadShakemapStaticView();
+  bindEventDetailMapTab();
+  // Map is the default active tab — init after Leaflet (defer) is ready.
+  const tryInit = () => {
+    if (typeof L !== "undefined") {
+      initEventDetailMap(false);
+      return;
+    }
+    window.setTimeout(tryInit, 50);
+  };
+  tryInit();
 });

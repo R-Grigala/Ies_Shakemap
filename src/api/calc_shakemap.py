@@ -23,6 +23,39 @@ ALLOWED_IMAGES = {
     "psa3p0": "psa3p0.jpg",  # PSA 3.0s
 }
 
+# Leaflet map-ისთვის დასაშვები product ფაილები (path traversal-ისგან დაცული allowlist)
+ALLOWED_PRODUCT_FILES = {
+    "info.json": "application/json",
+    "cont_mi.json": "application/json",
+    "cont_pga.json": "application/json",
+    "cont_pgv.json": "application/json",
+    "cont_psa0p3.json": "application/json",
+    "cont_psa1p0.json": "application/json",
+    "cont_psa3p0.json": "application/json",
+    "stationlist.json": "application/json",
+    "rupture.json": "application/json",
+    "mmi_legend.png": "image/png",
+}
+
+
+def _products_dir(seiscomp_oid):
+    return os.path.join(SHAKEMAP_BASE_PATH, seiscomp_oid, "current", "products")
+
+
+def _resolve_product_path(seiscomp_oid, filename):
+    """აბრუნებს (absolute_path, mimetype) ან (None, error_reason)."""
+    safe_name = os.path.basename(filename or "")
+    mimetype = ALLOWED_PRODUCT_FILES.get(safe_name)
+    if not mimetype:
+        return None, "unsupported"
+    products_path = os.path.abspath(_products_dir(seiscomp_oid))
+    file_path = os.path.abspath(os.path.join(products_path, safe_name))
+    if not file_path.startswith(products_path + os.sep) and file_path != products_path:
+        return None, "invalid_path"
+    if not os.path.isfile(file_path):
+        return None, "missing"
+    return file_path, mimetype
+
 
 logger = logging.getLogger("app.shakemap_api")
 
@@ -145,7 +178,7 @@ class ShakeMapResults(Resource):
             logger.info("ShakeMap results failed: seiscomp_oid=%s not found", seiscomp_oid)
             return {"error": f"Event not found: {seiscomp_oid}"}, 404
 
-        products_path = f"{SHAKEMAP_BASE_PATH}/{seiscomp_oid}/current/products" if seiscomp_oid else None
+        products_path = _products_dir(seiscomp_oid) if seiscomp_oid else None
         images = []
         for key, filename in ALLOWED_IMAGES.items():
             file_path = os.path.join(products_path, filename)
@@ -195,7 +228,7 @@ class ShakeMapResultImage(Resource):
             )
             return {"error": f"Unsupported image type: {image_type}"}, 400
 
-        products_path = f'{SHAKEMAP_BASE_PATH}/{seiscomp_oid}/current/products'
+        products_path = _products_dir(seiscomp_oid)
         file_path = os.path.join(products_path, filename)
         if not os.path.exists(file_path):
             logger.info(
@@ -211,3 +244,47 @@ class ShakeMapResultImage(Resource):
             image_type,
         )
         return send_file(file_path, mimetype="image/jpeg")
+
+
+@shakemap_ns.route("/shakemap/<string:seiscomp_oid>/product/<string:filename>")
+@shakemap_ns.doc(
+    params={
+        "seiscomp_oid": "SeisComP Event OID",
+        "filename": (
+            "Product file from current/products "
+            "(info.json, cont_*.json, stationlist.json, rupture.json, mmi_legend.png)"
+        ),
+    },
+    responses={
+        200: "OK",
+        400: "Invalid Argument",
+        404: "Not Found",
+    },
+)
+class ShakeMapProductFile(Resource):
+    def get(self, seiscomp_oid, filename):
+        """აბრუნებს ShakeMap product ფაილს (GeoJSON/JSON/PNG) კონკრეტული ივენთისთვის."""
+        event = SeismicEvent.query.filter_by(seiscomp_oid=seiscomp_oid).first()
+        if not event:
+            logger.info("ShakeMap product failed: seiscomp_oid=%s event not found", seiscomp_oid)
+            return {"error": f"Event not found: {seiscomp_oid}"}, 404
+
+        file_path, result = _resolve_product_path(seiscomp_oid, filename)
+        if result == "unsupported":
+            return {"error": f"Unsupported product file: {filename}"}, 400
+        if result == "invalid_path":
+            return {"error": "Invalid product path."}, 400
+        if result == "missing" or not file_path:
+            logger.info(
+                "ShakeMap product missing: seiscomp_oid=%s file=%s",
+                seiscomp_oid,
+                filename,
+            )
+            return {"error": f"Product not found: {filename}"}, 404
+
+        logger.info(
+            "ShakeMap product success: seiscomp_oid=%s file=%s",
+            seiscomp_oid,
+            os.path.basename(file_path),
+        )
+        return send_file(file_path, mimetype=result)
