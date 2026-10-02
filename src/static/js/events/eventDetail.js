@@ -171,9 +171,10 @@ function showShakemapType(imageType) {
 
 function bindShakemapTypeToolbar() {
   const toolbar = document.getElementById("shakemapTypeToolbar");
-  if (!toolbar) {
+  if (!toolbar || toolbar.dataset.bound === "1") {
     return;
   }
+  toolbar.dataset.bound = "1";
   toolbar.querySelectorAll(".static-view-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const type = btn.dataset.imageType;
@@ -216,6 +217,14 @@ async function loadShakemapStaticView() {
     const payload = await response.json().catch(() => ({}));
 
     shakemapImagesByType = normalizeShakemapImages(seiscompOid, payload.images);
+
+    if (payload.job && payload.job.status) {
+      const jobStatus = String(payload.job.status).toLowerCase();
+      updateShakemapStatusUi(jobStatus, payload.job);
+      if (isShakemapBusy(jobStatus) && !shakemapStatusPollTimer) {
+        startShakemapStatusPolling();
+      }
+    }
 
     if (!response.ok) {
       await probeAndUpgradeImages(shakemapImagesByType);
@@ -366,15 +375,66 @@ function getShakemapBadgeClass(status) {
   }
 }
 
-function updateShakemapStatusUi(status) {
+const SHAKEMAP_STATUS_DISPLAY = {
+  pending: { icon: "fas fa-minus-circle", label: "not run yet" },
+  waiting: { icon: "fas fa-hourglass-half", label: "waiting in queue" },
+  running: { icon: "fas fa-spinner fa-spin", label: "running" },
+  generated: { icon: "fas fa-check-circle", label: "generated" },
+  failed: { icon: "fas fa-times-circle", label: "failed" },
+};
+const SHAKEMAP_STATUS_POLL_MS = 5000;
+let shakemapStatusPollTimer = null;
+
+function isShakemapBusy(status) {
+  return status === "waiting" || status === "running";
+}
+
+function formatShakemapTime(isoValue) {
+  if (!isoValue) {
+    return "";
+  }
+  const date = new Date(isoValue);
+  return Number.isNaN(date.getTime()) ? String(isoValue) : date.toLocaleString();
+}
+
+function buildShakemapStatusTitle(normalized, job) {
+  if (!job) {
+    return "";
+  }
+  const parts = [];
+  if (job.started_at) {
+    parts.push(`Started: ${formatShakemapTime(job.started_at)}`);
+  }
+  if (job.finished_at && !isShakemapBusy(normalized)) {
+    parts.push(`Finished: ${formatShakemapTime(job.finished_at)}`);
+  }
+  if (normalized === "failed" && job.error) {
+    parts.push(`Error: ${job.error}`);
+  }
+  return parts.join("\n");
+}
+
+/**
+ * @param {string} status
+ * @param {{ status?: string, error?: string|null, started_at?: string|null, finished_at?: string|null }|null} [job]
+ */
+function updateShakemapStatusUi(status, job = null) {
   const badge = document.getElementById("shakemapStatusBadge");
+  const summary = document.getElementById("shakemapStatusSummary");
   const btn = document.getElementById("btnGenerateShakemap");
   const normalized = String(status || "pending").toLowerCase();
+  const display = SHAKEMAP_STATUS_DISPLAY[normalized] || { icon: "fas fa-info-circle", label: normalized };
 
   if (badge) {
     badge.dataset.status = normalized;
     badge.className = getShakemapBadgeClass(normalized);
-    badge.textContent = `ShakeMap: ${normalized}`;
+    badge.innerHTML = `<i class="${display.icon} me-1"></i>ShakeMap: ${eventDetailEscapeHtml(display.label)}`;
+    badge.title = buildShakemapStatusTitle(normalized, job);
+  }
+
+  if (summary) {
+    summary.textContent =
+      normalized === "failed" && job?.error ? `${display.label} — ${job.error}` : display.label;
   }
 
   if (!btn) {
@@ -385,9 +445,10 @@ function updateShakemapStatusUi(status) {
     typeof window.hasPermission === "function" ? window.hasPermission("can_shakemap") : false;
   btn.classList.toggle("d-none", !canShakemap);
 
-  const busy = normalized === "waiting" || normalized === "running";
-  btn.disabled = busy;
-  if (busy) {
+  btn.disabled = isShakemapBusy(normalized);
+  if (normalized === "waiting") {
+    btn.innerHTML = '<i class="fas fa-hourglass-half me-1"></i>Queued...';
+  } else if (normalized === "running") {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Running...';
   } else if (normalized === "generated") {
     btn.textContent = "Regenerate ShakeMap";
@@ -421,10 +482,75 @@ function updatePublishStatusUi(published) {
   btn.disabled = false;
 }
 
+function stopShakemapStatusPolling() {
+  if (shakemapStatusPollTimer) {
+    window.clearTimeout(shakemapStatusPollTimer);
+    shakemapStatusPollTimer = null;
+  }
+}
+
+async function fetchShakemapJob(seiscompOid) {
+  const response = await fetch(`/api/shakemap/${encodeURIComponent(seiscompOid)}`, {
+    method: "GET",
+    headers: { accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    return null;
+  }
+  const payload = await response.json().catch(() => ({}));
+  return payload.job || null;
+}
+
+async function onShakemapFinished(status, job) {
+  if (status === "generated") {
+    showAlertSafe("success", "ShakeMap calculation finished.");
+    await loadShakemapStaticView();
+    if (eventDetailMapInitialized) {
+      initEventDetailMap(true);
+    }
+  } else if (status === "failed") {
+    showAlertSafe("danger", `ShakeMap calculation failed${job?.error ? `: ${job.error}` : "."}`);
+  }
+}
+
+function startShakemapStatusPolling() {
+  stopShakemapStatusPolling();
+  const seiscompOid = getDetailSeiscompOid();
+  if (!seiscompOid) {
+    return;
+  }
+
+  const poll = async () => {
+    let job = null;
+    try {
+      job = await fetchShakemapJob(seiscompOid);
+    } catch {
+      job = null;
+    }
+
+    if (job && job.status) {
+      const status = String(job.status).toLowerCase();
+      updateShakemapStatusUi(status, job);
+      if (!isShakemapBusy(status)) {
+        stopShakemapStatusPolling();
+        await onShakemapFinished(status, job);
+        return;
+      }
+    }
+    shakemapStatusPollTimer = window.setTimeout(poll, SHAKEMAP_STATUS_POLL_MS);
+  };
+
+  shakemapStatusPollTimer = window.setTimeout(poll, SHAKEMAP_STATUS_POLL_MS);
+}
+
 function initDetailStatusActions() {
   const badge = document.getElementById("shakemapStatusBadge");
-  const status = badge?.dataset?.status || "pending";
+  const status = (badge?.dataset?.status || "pending").toLowerCase();
   updateShakemapStatusUi(status);
+  if (isShakemapBusy(status)) {
+    startShakemapStatusPolling();
+  }
 
   const publishBadge = document.getElementById("publishStatusBadge");
   const published = publishBadge?.dataset?.published === "1";
@@ -479,6 +605,7 @@ async function onGenerateShakemapClick() {
 
     showAlertSafe("success", payload.message || `ShakeMap queued (${seiscompOid}).`);
     updateShakemapStatusUi(payload.status || "waiting");
+    startShakemapStatusPolling();
   } catch {
     showAlertSafe("danger", "Request failed while queueing ShakeMap.");
     btn.disabled = false;
