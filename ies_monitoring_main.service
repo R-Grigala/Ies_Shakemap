@@ -1,5 +1,5 @@
 [Unit]
-Description=IES Monitoring Main Flask App (Gunicorn)
+Description=IES Shakemap Main Flask App (Gunicorn)
 After=network.target
 
 [Service]
