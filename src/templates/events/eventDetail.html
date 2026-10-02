@@ -11,8 +11,9 @@ EarthQuakeWatch | Event {{ event.event_id or event.seiscomp_oid }}
   id="shakemapStaticView"
   data-seiscomp-oid="{{ event.seiscomp_oid }}"
 >
-  <a href="{{ url_for('events.events') }}" class="event-detail-back">
-    &larr; Back
+  <a href="{{ url_for('events.events') }}" class="event-detail-back" aria-label="Back to events list">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i>
+    <span>Back to events</span>
   </a>
 
   <h1 class="event-detail-title h3 mb-3">
