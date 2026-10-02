@@ -255,7 +255,7 @@ EarthQuakeWatch | Event {{ event.event_id or event.seiscomp_oid }}
         </div>
         <div class="metadata-item">
           <div class="event-summary-label">ShakeMap status</div>
-          <div class="event-summary-value">{{ event.shakemap_status }}</div>
+          <div id="shakemapStatusSummary" class="event-summary-value">{{ event.shakemap_status }}</div>
         </div>
       </div>
     </div>

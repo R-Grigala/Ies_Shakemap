@@ -196,6 +196,12 @@ class ShakeMapResults(Resource):
             "event_id": seiscomp_oid,
             "products_path": products_path,
             "images": images,
+            "job": {
+                "status": shakemap_job.status,
+                "error": shakemap_job.error,
+                "started_at": shakemap_job.started_at.isoformat() if shakemap_job.started_at else None,
+                "finished_at": shakemap_job.finished_at.isoformat() if shakemap_job.finished_at else None,
+            },
         }, 200
 
 
