@@ -1,4 +1,4 @@
-# Ies_Monitoring — პროექტის მოკლე ინსტრუქცია
+# Ies_Shakemap — პროექტის მოკლე ინსტრუქცია
 
 ## რას აკეთებს ეს პროექტი
 ეს არის Flask-ზე აგებული სეისმური მონიტორინგის სისტემა, რომელიც:
@@ -118,36 +118,36 @@ Swagger-ში ორივე security სქემა აღწერილი
 - `CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/1`
 - `SHAKEMAP_GLOBAL_LOCK_FILE=/tmp/ies_shakemap_calc.lock` (არასავალდებულო, რეკომენდებული)
 
-> შენიშვნა: `CONDA_EXE` და `SHAKEMAP_CONDA_ENV` უნდა იყოს იგივე მნიშვნელობები, რასაც `ies_monitoring_main.service` და `ies_monitoring_celery.service` გარემოში იყენებ.
+> შენიშვნა: `CONDA_EXE` და `SHAKEMAP_CONDA_ENV` უნდა იყოს იგივე მნიშვნელობები, რასაც `ies_shakemap_main.service` და `ies_shakemap_celery.service` გარემოში იყენებ.
 
 ### 4) Gunicorn systemd სერვისის გაშვება
-შექმენი/განაახლე `/etc/systemd/system/ies_monitoring_main.service`  
+შექმენი/განაახლე `/etc/systemd/system/ies_shakemap_main.service`  
 (Template იხილე `create_service.txt` ფაილში)
 
 შემდეგ:
 - `sudo systemctl daemon-reload`
-- `sudo systemctl enable ies_monitoring_main`
-- `sudo systemctl restart ies_monitoring_main`
-- `sudo systemctl status ies_monitoring_main`
+- `sudo systemctl enable ies_shakemap_main`
+- `sudo systemctl restart ies_shakemap_main`
+- `sudo systemctl status ies_shakemap_main`
 
 ### 5) სერვისის ლოგების მონიტორინგი
-- `journalctl -u ies_monitoring_main -f`
+- `journalctl -u ies_shakemap_main -f`
 - პროექტის ლოგები: `logs/*.log`
 
 თუ ნახავ `Missing command: conda`/`sm_create`/`shake`, ნიშნავს service გარემოში PATH/conda არასწორია და უნდა გასწორდეს service `Environment` ნაწილში.
 
 ### 6) Celery worker-ის გაშვება (აუცილებელია ShakeMap რიგისთვის)
-შექმენი/განაახლე `/etc/systemd/system/ies_monitoring_celery.service`  
+შექმენი/განაახლე `/etc/systemd/system/ies_shakemap_celery.service`  
 (Template იხილე `ies_monitoring_celery.service` ფაილში)
 
 შემდეგ:
 - `sudo systemctl daemon-reload`
-- `sudo systemctl enable ies_monitoring_celery`
-- `sudo systemctl restart ies_monitoring_celery`
-- `sudo systemctl status ies_monitoring_celery`
+- `sudo systemctl enable ies_shakemap_celery`
+- `sudo systemctl restart ies_shakemap_celery`
+- `sudo systemctl status ies_shakemap_celery`
 
 ### 7) Celery ლოგების მონიტორინგი
-- `journalctl -u ies_monitoring_celery -f`
+- `journalctl -u ies_shakemap_celery -f`
 
 ### 8) Celery სწრაფი შემოწმება
 - `python -c "from src.celery_app import celery; print(celery.broker_connection().as_uri())"`

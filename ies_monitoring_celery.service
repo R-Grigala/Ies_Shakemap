@@ -1,5 +1,5 @@
 [Unit]
-Description=Celery Worker for IES Monitoring
+Description=Celery Worker for IES Shakemap
 After=network.target redis.service
 Requires=redis.service
 
@@ -8,13 +8,13 @@ Type=simple
 User=sysop
 Group=sysop
 
-WorkingDirectory=/var/www/Ies_Monitoring-main
+WorkingDirectory=/var/www/Ies_Shakemap-main
 
 # .env ფაილის ჩატვირთვა
-EnvironmentFile=/var/www/Ies_Monitoring-main/.env
+EnvironmentFile=/var/www/Ies_Shakemap-main/.env
 
-# venv celery
-ExecStart=/var/www/Ies_Monitoring-main/venv/bin/celery -A src.celery_app.celery_app worker
+# venv celeryIes_Shakemap
+ExecStart=/var/www/Ies_Shakemap-main/venv/bin/celery -A src.celery_app.celery_app worker
 
 Restart=always
 RestartSec=5

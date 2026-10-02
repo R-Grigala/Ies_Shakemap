@@ -13,7 +13,7 @@ jwt = JWTManager()
 api = Api(
     title='EarthQuakeWatch API',
     version='1.0',
-    description='Seismic monitoring API (Seiscomp → Shakemap → Mailer)',
+    description='Seismic monitoring API (Seiscomp → Shakemap)',
     authorizations=Config.AUTHORIZATION,
     doc='/api' # Swagger UI path
 )
