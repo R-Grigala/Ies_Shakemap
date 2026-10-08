@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-EarthQuakeWatch | Home
+ShakeMap | Home
 {% endblock %}
 
 {% block body %}
@@ -9,21 +9,12 @@ EarthQuakeWatch | Home
 
   <div class="row align-items-center mb-4">
     <div class="col-md-7">
-      <h1 class="display-5 fw-bold">🌍 EarthQuakeWatch</h1>
+      <h1 class="display-5 fw-bold">🌍 ShakeMap</h1>
       <p class="lead text-muted mt-3">
-        A real-time earthquake monitoring platform that brings event data,
-        ShakeMap generation, and operational alerts into one workflow.
+        A seismic monitoring platform that stores SeisComP earthquake events,
+        queues ShakeMap generation, and shows intensity, PGA, PGV and PSA
+        products as images and on an interactive map.
       </p>
-      <p class="text-muted mb-0">
-        It helps teams quickly understand what happened, where it happened, and
-        what to do next.
-      </p>
-
-      <div class="mt-4">
-        <a href="/events" class="btn btn-primary btn-lg">
-          View Events
-        </a>
-      </div>
     </div>
 
     <div class="col-md-5 text-center d-none d-md-block">
@@ -42,8 +33,9 @@ EarthQuakeWatch | Home
         <div class="card-body">
           <h5 class="card-title">What We Do</h5>
           <p class="card-text text-muted">
-            We collect seismic events, enrich them with location and magnitude
-            context, and provide a clear operational view for analysts.
+            We keep a catalog of earthquake events with origin time, location
+            (GE/EN), depth and ML magnitude, generate ShakeMap products for them,
+            and publish selected events to the IES website.
           </p>
         </div>
       </div>
@@ -54,8 +46,9 @@ EarthQuakeWatch | Home
         <div class="card-body">
           <h5 class="card-title">How It Works</h5>
           <p class="card-text text-muted">
-            Events are ingested through API, stored in the database, visualized
-            on map/table views, and processed for ShakeMap products.
+            Events arrive from SeisComP through the API or are added manually.
+            ShakeMap runs in a background queue, one job at a time, and results
+            appear on each event's detail page.
           </p>
         </div>
       </div>
@@ -66,8 +59,9 @@ EarthQuakeWatch | Home
         <div class="card-body">
           <h5 class="card-title">Why It Helps</h5>
           <p class="card-text text-muted">
-            A single interface reduces response time, improves consistency, and
-            supports faster operational decisions during seismic activity.
+            Event list, ShakeMap status, products and publishing live in one
+            place, and role-based permissions control who can edit events, run
+            ShakeMap or manage users.
           </p>
         </div>
       </div>
@@ -82,7 +76,8 @@ EarthQuakeWatch | Home
           <div class="p-3 bg-light rounded h-100">
             <div class="fw-semibold">1) Ingest</div>
             <div class="small text-muted mt-1">
-              Receive earthquake data from SeisComP and internal API sources.
+              Receive events from SeisComP via API key, or add them in the
+              events page.
             </div>
           </div>
         </div>
@@ -98,7 +93,8 @@ EarthQuakeWatch | Home
           <div class="p-3 bg-light rounded h-100">
             <div class="fw-semibold">3) Process</div>
             <div class="small text-muted mt-1">
-              Run ShakeMap jobs and track status from queue to completion.
+              Queue ShakeMap jobs and track status: waiting, running,
+              generated or failed.
             </div>
           </div>
         </div>
@@ -106,7 +102,8 @@ EarthQuakeWatch | Home
           <div class="p-3 bg-light rounded h-100">
             <div class="fw-semibold">4) Deliver</div>
             <div class="small text-muted mt-1">
-              Surface results in event dashboards, maps, and notifications.
+              View ShakeMap images and map layers on the event page, and
+              publish the event to the IES website.
             </div>
           </div>
         </div>
