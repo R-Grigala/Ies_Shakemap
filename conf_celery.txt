@@ -3,10 +3,8 @@ Celery კონფიგურაცია (Redis-ით)
 
 1) Python dependency
 --------------------
-აქტიურ venv-ში დააყენე:
-pip install celery redis
-
-და დაამატე `requirements.txt`-შიც (რომ deploy-ზე არ დაგეკარგოს).
+`celery` და `redis` უკვე `requirements.txt`-შია:
+pip install -r requirements.txt
 
 2) .env პარამეტრები
 -------------------
@@ -27,7 +25,13 @@ CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/1
 შექმენი:
 sudo nano /etc/systemd/system/ies_shakemap_celery.service
 
-გადაიტანე შემდეგი კონფიგურაცია რომელიც მოცემულია ies_shakemap_celery.service-ში.
+გადაიტანე კონფიგურაცია repository-ის ფაილიდან ies_monitoring_celery.service.
+
+- Worker-ს `--concurrency` არ გადასცე (ან გადაეცი 1): `src/celery_app.py`-ში `worker_concurrency=1`,
+  ShakeMap ერთდროულად ერთზეა გათვლილი.
+- Unit მხოლოდ `.env`-ს ტვირთავს, ამიტომ `CONDA_EXE` და `SHAKEMAP_CONDA_ENV` `.env`-ში უნდა იყოს.
+- Unit-ს აქვს `Requires=redis.service`; Ubuntu-ზე Redis-ის unit ხშირად `redis-server.service`-ია
+  (alias `redis.service`) — გადაამოწმე `systemctl status redis`.
 
 4) systemd აქტივაცია
 --------------------

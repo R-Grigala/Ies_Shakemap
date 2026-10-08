@@ -35,12 +35,14 @@
 
 `create_app()`:
 
-1. იტვირთება `Config` (`.env`)
-2. logging (`src/logger`)
-3. extensions: `db`, `migrate`, `jwt`, RESTX `api`
-4. blueprints (HTML): events, shakemap, auth, accounts
-5. CLI: `init_db`, `populate_db`
-6. 404/500 handlers
+1. `CORS(app)` (Flask-CORS, ყველა origin)
+2. იტვირთება `Config` (`.env`)
+3. logging (`src/logger`)
+4. route `/` (home) + context processor (`google_maps_api_key` template-ებში)
+5. extensions: `db`, `migrate`, `jwt`, RESTX `api` (ყველა namespace `path='/api'`)
+6. blueprints (HTML): `auth`, `accounts`, `events` — ცალკე `shakemap` blueprint არ არის
+7. CLI: `init_db`, `populate_db`
+8. 404/500 handlers (HTML template)
 
 JWT identity = `User.uuid`; token-ში claims: role + permissions.
 
@@ -67,9 +69,11 @@ POST /api/shakemap { seiscomp_oid }
         │
         ├─ is_authorized_request()  (API key ან JWT)
         ├─ have_permission("can_shakemap")
-        ├─ SeismicEvent by OID
+        ├─ SeismicEvent by OID            (არ არის → 404)
+        ├─ job უკვე waiting/running       → 409
         ├─ create/update ShakemapJob → status=waiting
-        └─ run_shakemap.delay(job_id) → 202 + task_id
+        │    (API key-ით: job.uuid = api_user@iliauni.edu.ge-ს uuid)
+        └─ run_shakemap.delay(job_id) → 202 {status, job_id, task_id}
 
 Celery task run_shakemap(job_id):
         │
@@ -78,11 +82,22 @@ Celery task run_shakemap(job_id):
         ├─ run_shakemap_worker → calc_shakemap (subprocess bash + conda)
         └─ status=generated | failed (+ error, finished_at)
 
-GET /api/shakemap/<oid>
-GET /api/shakemap/<oid>/image/<pga|pgv|intensity>
+GET /api/shakemap/<oid>                       (საჯარო) job status + images[]
+GET /api/shakemap/<oid>/image/<type>          (საჯარო) intensity|pga|pgv|psa0p3|psa1p0|psa3p0
+GET /api/shakemap/<oid>/product/<filename>    (საჯარო) allowlist: info.json, cont_*.json,
+                                                        stationlist.json, rupture.json, mmi_legend.png
         │
         └─ files under SHAKEMAP_BASE_PATH/{oid}/current/products/
 ```
+
+სტატუსები: `pending` (job ჯერ არ არსებობს) → `waiting` → `running` → `generated` | `failed`.
+
+### UI მხარე
+
+`/events/<seiscomp_oid>` (`templates/events/eventDetail.html`):
+
+- `static/js/events/eventDetail.js` — სტატუსის badge, „Generate“ (`POST /api/shakemap`, `can_shakemap`), polling `GET /api/shakemap/<oid>`-ზე სანამ job `waiting`/`running`-ია, სურათების toolbar, publish toggle (`can_events`)
+- `static/js/shakemap/map.js` — Google Maps ფენები (Intensity, PGA, PGV, PSA) `product/<filename>` ფაილებიდან, ეპიცენტრი, სადგურები, rupture, legend
 
 ## Auth ნაკადი
 
@@ -100,25 +115,32 @@ API call:
   Authorization: Bearer …  → User.role.check_permission(...)
 ```
 
-API key-ით job-ზე იწერება სპეციალური მომხმარებელი `api_user@iliauni.edu.ge` (თუ არსებობს DB-ში).
+API key-ით job-ზე იწერება სპეციალური მომხმარებელი `api_user@iliauni.edu.ge`. ეს user **აუცილებლად** უნდა არსებობდეს DB-ში (`flask populate_db` ქმნის) — თორემ `POST /api/shakemap` API key-ით 500-ს აბრუნებს.
+
+Frontend: `access_token` ინახება `localStorage`-ში; `static/js/globalAccessControl.js` ვადაგასვლისას ავტომატურად იძახებს `/api/refresh`-ს და `hasPermission()`-ით მალავს/აჩენს ღილაკებს (`is_admin` frontend-ზე ყველა უფლებად ითვლება, backend-ზე — არა; იქ მოწმდება კონკრეტული flag).
 
 ## Publish ნაკადი
 
 ```text
 POST /api/publish_event { seiscomp_oid }
-  → can_events
-  → wp_publish_client.publish_eq(...)
-  → PublishedEarthquake row
+  → API key ან JWT + can_events
+  → WP_PUBLISH_CODE ცარიელია → 500
+  → wp_publish_client.publish_eq(...)   (WP id = event_id, ან seiscomp_oid თუ event_id არ არის)
+  → WP შეცდომა → 502
+  → PublishedEarthquake row (create/update, wp_response)
 
-POST /api/unpublish_event
+POST /api/unpublish_event { seiscomp_oid }
   → unpublish_eq(...)
   → delete PublishedEarthquake row
 ```
 
+WP endpoint: `WP_AJAX_URL` hardcoded-ია `src/services/wp_publish_client.py`-ში (`https://ies-staging.iliauni.edu.ge/wp-admin/admin-ajax.php`). Production საიტზე გადასასვლელად კოდის შეცვლაა საჭირო.
+
 ## concurrency და უარყოფითი გარანტიები
 
-- Celery: `worker_concurrency=1` — ერთდროულად ერთი ShakeMap
-- soft/hard time limits: ~9 / 10 წუთი
+- Celery: `worker_concurrency=1` — ერთდროულად ერთი ShakeMap (CLI-ის `--concurrency` ამას გადაფარავს)
+- soft/hard time limits: 540 / 600 წამი
+- `worker_prefetch_multiplier=1`, `worker_max_tasks_per_child=100`, `worker_max_memory_per_child≈200MB`
 - იგივე `seiscomp_oid`-ზე `waiting`/`running` → **409** (არ იდუბლირება რიგში)
 
 ## Swagger

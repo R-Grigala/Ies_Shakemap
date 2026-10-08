@@ -52,13 +52,19 @@ DEV_MYSQL_DATABASE=ies_monitoring_dev
 ## 3) ბაზა
 
 ```bash
-# სქემა SQLAlchemy-დან (destructive)
-set FLASK_APP=app.py
+# Flask CLI იპოვის app.py-ს root-იდან; საჭიროების შემთხვევაში:
+export FLASK_APP=app.py        # Windows: set FLASK_APP=app.py
+
+# სქემა SQLAlchemy-დან (destructive; დაგისვამს y/N კითხვას)
 flask init_db --confirm-text RESET_DB
 
 # საწყისი roles/users + sample event
 flask populate_db
 ```
+
+`APP_ENV=production`-ში ორივე ბრძანება დაბლოკილია, თუ არ გადასცემ `--force`-ს (`init_db`-ს `--force` y/N კითხვასაც გამოტოვებს).
+
+`reset_db.sh` ამჟამად `flask init_db`-ს `--confirm-text RESET_DB`-ის გარეშე იძახებს და ამიტომ შეცდომით ჩერდება — გამოიყენე ზემოთ მოცემული ბრძანებები.
 
 ან migrations:
 
@@ -80,6 +86,10 @@ flask db upgrade
 | API user | `api_user@iliauni.edu.ge` |
 
 პაროლი seed-ში: `PASSWORD` (შეცვალე production-მდე).
+
+Sample event: `seiscomp_oid=ies2024oeem` (ონი, ML 5.33) → `http://localhost:5000/events/ies2024oeem`.
+
+`api_user@iliauni.edu.ge` აუცილებელია, თუ ShakeMap-ს `X-API-Key`-ით უშვებ (job-ზე ამ user-ის uuid იწერება).
 
 ## 4) Flask app
 
@@ -109,7 +119,7 @@ Windows-ზე Celery-ს შეიძლება დამატებით�
 python -m unittest discover tests
 ```
 
-`TestConfig` იყენებს in-memory SQLite-ს.
+`TestConfig` იყენებს in-memory SQLite-ს. ტესტები მცირეა (3 ცალი: config, `/`, ცარიელი `/api/events` → 404).
 
 ## ხშირი პრობლემები
 
@@ -119,7 +129,12 @@ python -m unittest discover tests
 | 403 ShakeMap/events | role-ს არ აქვს `can_shakemap` / `can_events` |
 | Job `failed` | conda/sm_create/shake PATH; შეამოწმე `logs/` |
 | Celery არ იღებს task-ს | Redis URL არ ემთხვევა app/worker env-ს |
-| `Invalid APP_ENV` | მხოლოდ `production` \| `development` \| `testing` |
+| `Invalid database configuration for environment` | `APP_ENV` მხოლოდ `production` \| `development` \| `testing` |
+| `GET /api/events` → 404 | ბაზა ცარიელია (ასე მუშაობს კოდი); გაუშვი `flask populate_db` |
+| `POST /api/shakemap` API key-ით → 500 | DB-ში არ არის `api_user@iliauni.edu.ge` |
+| refresh არ მუშაობს | `JWT_COOKIE_SECURE=True` — cookie მხოლოდ HTTPS-ზე (ან `localhost`-ზე, ბრაუზერის მიხედვით) |
+| `.env` არ იკითხება | `load_dotenv('.env')` ეძებს მიმდინარე სამუშაო საქაღალდეში — გაუშვი პროექტის root-იდან |
+| ShakeMap რუკა ცარიელია | `GOOGLE_MAPS_API_KEY` არ არის, ან `products/`-ში JSON ფაილები არ არის |
 
 ## შემდეგი
 

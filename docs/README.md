@@ -2,8 +2,10 @@
 
 ეს საქაღალდე შეიცავს პროექტის ეტაპობრივ ტექნიკურ დოკუმენტაციას.
 
-კოდის სწრაფი მიმოხილვისთვის იხილე root [`README.md`](../README.md).  
+კოდის სწრაფი მიმოხილვისთვის და **სრული API ცხრილისთვის** (auth-ით) იხილე root [`README.md`](../README.md).  
 Production/systemd ნოტებისთვის — [`instruction.txt`](../instruction.txt) და `conf_*.txt`.
+
+წყაროს პრიორიტეტი: კოდი → `docs/` → `README.md` → `instruction.txt` / `conf_*.txt`. თუ რამე ეწინააღმდეგება, სწორია კოდი.
 
 ---
 
@@ -13,7 +15,7 @@ Production/systemd ნოტებისთვის — [`instruction.txt`](../
 |------:|------|---------|
 | **1** | მიმოხილვა, არქიტექტურა, ლოკალური დაყენება | ✅ მზადაა |
 | **2** | მონაცემთა მოდელი და ძირითადი ნაკადები | ⏳ შემდეგი |
-| **3** | API ცნობარი (auth, events, shakemap, accounts, …) | ⏳ |
+| **3** | API ცნობარი (request/response დეტალები) | ⏳ (endpoint + auth ცხრილი უკვე root `README.md`-შია) |
 | **4** | Frontend / UI გვერდები და JS | ⏳ |
 | **5** | Celery, ShakeMap worker, ინტეგრაციები | ⏳ |
 | **6** | Production deployment და ოპერაცია | ⏳ |
@@ -42,4 +44,4 @@ Production/systemd ნოტებისთვის — [`instruction.txt`](../
 
 ## შემდეგი ნაბიჯი
 
-**ეტაპი 2:** მონაცემთა მოდელი (`SeismicEvent`, `ShakemapJob`, `User`/`Role`, publish/recipients) და end-to-end ნაკადები (ივენთის შექმნა → ShakeMap → gallery → WP publish).
+**ეტაპი 2:** მონაცემთა მოდელი (`SeismicEvent`, `ShakemapJob`, `User`/`Role`, `PublishedEarthquake`, `SendNotification`, recipients) და end-to-end ნაკადები (ივენთის შექმნა → `/events/<seiscomp_oid>` → ShakeMap → სურათები/რუკა → WP publish).

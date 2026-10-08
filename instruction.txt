@@ -1,52 +1,73 @@
 # Ies_Shakemap — პროექტის მოკლე ინსტრუქცია
 
+სრული ტექნიკური დოკუმენტაცია: `docs/README.md`. სრული API ცხრილი (auth-ით): `README.md`.
+ეს ფაილი — ოპერაციული (production) ნოტებია.
+
 ## რას აკეთებს ეს პროექტი
 ეს არის Flask-ზე აგებული სეისმური მონიტორინგის სისტემა, რომელიც:
 - ინახავს მიწისძვრის ივენთებს ბაზაში
-- უშვებს ShakeMap გენერაციას SeisComP OID-ით
-- აჩვენებს გენერირებულ სურათებს (pga/pgv/intensity)
+- უშვებს ShakeMap გენერაციას SeisComP OID-ით (Celery + Redis რიგი)
+- აჩვენებს გენერირებულ სურათებს (intensity/pga/pgv/psa) და ShakeMap რუკას ივენთის დეტალურ გვერდზე
+- აქვეყნებს ივენთებს WordPress-ზე (publish/unpublish)
 - მართავს მომხმარებლებს, როლებს და ავტორიზაციას (JWT)
 
 ---
 
 ## მთავარი გვერდები (Frontend)
 - `/` — მთავარი გვერდი
-- `/shakemap` — ShakeMap ოპერაციები: ივენთების სია, regenerate, gallery
-- `/events` — ივენთების დამატება/დათვალიერება ცალკე გვერდზე
-- `/login` — ავტორიზაცია
+- `/events` — ივენთების სია, დამატება/რედაქტირება/წაშლა, ფილტრი
+- `/events/<seiscomp_oid>` — ივენთის დეტალი: ShakeMap სტატუსი, Generate, სურათები, რუკა, publish
+- `/login` — ავტორიზაცია (+ პაროლის აღდგენის მოთხოვნა)
+- `/registration` — ახალი მომხმარებლის დამატება (`can_users` ან `is_admin`)
 - `/change_password` — შიგნიდან პაროლის შეცვლა (JWT + ძველი პაროლი)
-- `/reset_password/<token>` — მეილიდან მოსული პაროლის აღდგენა (token flow)
-- `/accounts` — მომხმარებლებისა და როლების მართვა (უფლებებზე დამოკიდებული)
+- `/reset_password/<token>` — მეილიდან მოსული პაროლის აღდგენა (token ვადა 5 წუთი)
+- `/accounts` — მომხმარებლებისა და როლების მართვა (`can_users`)
+
+ცალკე `/shakemap` გვერდი არ არსებობს.
 
 ---
 
 ## API (მთავარი endpoint-ები)
 
+"Key ან JWT" = `X-API-Key` ან `Authorization: Bearer <access_token>`.
+
 ### ივენთები
-- `GET /api/events` — ივენთების სია
-- `POST /api/events` — ივენთის შექმნა/განახლება (`X-API-Key` სავალდებულოა)
+- `GET /api/events` — ივენთების სია (საჯარო; ცარიელ ბაზაზე 404)
+- `POST /api/events` — ივენთის შექმნა/განახლება `seiscomp_oid`-ით (Key ან JWT + `can_events`)
+- `PUT /api/events/<id>` / `DELETE /api/events/<id>` — Key ან JWT + `can_events`
+- `POST /api/filter_event` — ფილტრი (საჯარო)
 
 ### ShakeMap
-- `POST /api/shakemap` — ShakeMap გაშვება (`seiscomp_oid`)
-  - ავტორიზაცია: ან `X-API-Key`, ან `Authorization: Bearer <JWT>`
-- `GET /api/shakemap/<seiscomp_oid>` — კონკრეტული ივენთის ShakeMap შედეგები (images + paths)
-- `GET /api/shakemap/<seiscomp_oid>/image/<image_type>` — კონკრეტული სურათის ფაილი
+- `POST /api/shakemap` — ShakeMap რიგში ჩაყენება (`seiscomp_oid`), Key ან JWT + `can_shakemap`
+  - პასუხი 202 (`job_id`, `task_id`); 409 თუ უკვე `waiting`/`running`
+- `GET /api/shakemap/<seiscomp_oid>` — job სტატუსი + სურათების სია
+- `GET /api/shakemap/<seiscomp_oid>/image/<image_type>` — `intensity|pga|pgv|psa0p3|psa1p0|psa3p0`
+- `GET /api/shakemap/<seiscomp_oid>/product/<filename>` — რუკის ფაილები (info.json, cont_*.json, ...)
+
+### Publish
+- `POST /api/publish_event`, `POST /api/unpublish_event` — `seiscomp_oid`, Key ან JWT + `can_events`
+  - საჭიროა `WP_PUBLISH_CODE`; WP URL კოდშია (ამჟამად staging)
 
 ### Auth
-- `POST /api/login` — login (აბრუნებს `access_token`, `refresh_token`, `permissions_token`)
-- `POST /api/refresh` — access token განახლება refresh token-ით
-- `POST /api/registration` — ახალი მომხმარებლის დამატება (მხოლოდ უფლებამოსილი user/admin)
+- `POST /api/login` — login; JSON-ში აბრუნებს მხოლოდ `access_token`-ს,
+  refresh token იწერება HttpOnly cookie-ში (path `/api/refresh`)
+- `POST /api/refresh` — ახალი `access_token` refresh cookie-ით
+- `POST /api/logout` — refresh cookie-ს წაშლა
+- `POST /api/registration` — ახალი მომხმარებელი (JWT + `can_users` ან `is_admin`)
 
 ### Accounts / Password
 - `GET /api/user` — მიმდინარე user ინფორმაცია
 - `PUT /api/user/<uuid>` — საკუთარი პროფილის განახლება
-- `GET /api/accounts` — user list (role permission)
-- `PUT /api/accounts/<uuid>` — user role-ის შეცვლა
-- `GET/POST /api/roles` — როლების სია/დამატება
-- `GET/PUT /api/roles/<role_id>` — როლის ნახვა/რედაქტირება
+- `GET /api/accounts` — user list (`can_users`)
+- `PUT /api/accounts/<uuid>` — user role-ის შეცვლა (`can_users`)
+- `GET/POST /api/roles` — როლების სია/დამატება (`can_users`)
+- `GET/PUT /api/roles/<role_id>` — როლის ნახვა/რედაქტირება (`can_users`)
 - `POST /api/request_reset_password` — reset ბმულის გაგზავნა ელფოსტაზე
 - `PUT /api/reset_password` — პაროლის reset token-ით
 - `PUT /api/change_password` — შიდა პაროლის შეცვლა (JWT + ძველი პაროლი)
+
+### Notification recipients
+- `/api/phone_recipients[/<id>]`, `/api/email_recipients[/<id>]` — CRUD (JWT + `can_users`)
 
 ---
 
@@ -55,7 +76,8 @@
 
 1. `ApiKeyAuth`
 - Header: `X-API-Key: <value>`
-- გამოიყენება შიდა/integration endpoint-ებზე
+- გამოიყენება შიდა/integration გამოძახებებზე; ვალიდური key ყველა permission შემოწმებას გადის
+- ShakeMap job API key-ით იწერება user-ზე `api_user@iliauni.edu.ge` — ის DB-ში უნდა არსებობდეს
 
 2. `JsonWebToken`
 - Header: `Authorization: Bearer <access_token>`
@@ -66,7 +88,8 @@ Swagger-ში ორივე security სქემა აღწერილი
 ---
 
 ## კონფიგი (მნიშვნელოვანი ENV)
-- `MY_SECRET_KEY`
+სრული სია: `docs/05-environment.md`.
+- `MY_SECRET_KEY` (password reset token-ები)
 - `API_KEY`
 - `JWT_SECRET_KEY`  (აუცილებლად 32+ bytes, ძლიერი მნიშვნელობა)
 - `SHAKEMAP_BASE_PATH`
@@ -74,10 +97,15 @@ Swagger-ში ორივე security სქემა აღწერილი
 - `SHAKEMAP_CONDA_ENV` (მაგ.: `shakemap`)
 - DB პარამეტრები (SQLite/MySQL გარემოზე დამოკიდებული)
 - MAIL პარამეტრები (reset password flow-სთვის)
+- `WP_PUBLISH_CODE`, `GOOGLE_MAPS_API_KEY`
 
 ---
 
 ## აპლიკაციის გაშვების სრული ინსტრუქცია (Production, service-ით)
+
+Repository-ში unit-ის template-ებია: `ies_monitoring_main.service` (Gunicorn) და
+`ies_monitoring_celery.service` (Celery). სერვერზე ისინი დაყენებულია სახელებით
+`/etc/systemd/system/ies_shakemap_main.service` და `/etc/systemd/system/ies_shakemap_celery.service`.
 
 ### 0) წინაპირობები (აუცილებელი)
 სერვისის გაშვებამდე სერვერზე უნდა იყოს:
@@ -85,6 +113,7 @@ Swagger-ში ორივე security სქემა აღწერილი
 - Miniconda/Conda
 - ShakeMap გარემო (`shakemap` conda env)
 - ShakeMap ბრძანებები: `sm_create`, `shake`
+- Redis (`conf_redis.txt`)
 - გამართული ბაზა (MySQL ან SQLite)
 - Nginx (თუ reverse proxy იყენება)
 
@@ -98,9 +127,11 @@ Swagger-ში ორივე security სქემა აღწერილი
 ### 2) ბაზის მომზადება
 - შექმენი ბაზა (თუ MySQL-ია)
 - მიუთითე სწორი DB credentials `.env`-ში
-- საჭიროებისას გაუშვი:
-  - `flask init_db --confirm-text RESET_DB` (სიფრთხილით, reset-ს აკეთებს)
-  - `flask populate_db` (საწყისი მონაცემებისთვის)
+- ახალ ბაზაზე: `flask db upgrade` (migrations)
+- საჭიროებისას (production-ში `--force` სავალდებულოა):
+  - `flask init_db --confirm-text RESET_DB --force` (სიფრთხილით, ყველა ცხრილს შლის)
+  - `flask populate_db --force` (roles, admin, api_user, sample event)
+- `reset_db.sh` ამჟამად `--confirm-text`-ს არ გადასცემს და ჩერდება — არ გამოიყენო
 
 ### 3) `.env` შევსება (აუცილებელი ველები)
 `.env`-ში შეიყვანე რეალური მნიშვნელობები:
@@ -116,13 +147,20 @@ Swagger-ში ორივე security სქემა აღწერილი
 - `REDIS_URL=redis://127.0.0.1:6379/0`
 - `CELERY_BROKER_URL=redis://127.0.0.1:6379/0`
 - `CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/1`
-- `SHAKEMAP_GLOBAL_LOCK_FILE=/tmp/ies_shakemap_calc.lock` (არასავალდებულო, რეკომენდებული)
+- `WP_PUBLISH_CODE`
+- `GOOGLE_MAPS_API_KEY`
 
-> შენიშვნა: `CONDA_EXE` და `SHAKEMAP_CONDA_ENV` უნდა იყოს იგივე მნიშვნელობები, რასაც `ies_shakemap_main.service` და `ies_shakemap_celery.service` გარემოში იყენებ.
+> შენიშვნა: ShakeMap გამოთვლა Celery worker-ში ეშვება. Celery unit მხოლოდ `.env`-ს ტვირთავს,
+> ამიტომ `CONDA_EXE` და `SHAKEMAP_CONDA_ENV` აუცილებლად `.env`-ში უნდა იყოს.
+> `SHAKEMAP_GLOBAL_LOCK_FILE` კოდში არ გამოიყენება.
 
 ### 4) Gunicorn systemd სერვისის გაშვება
-შექმენი/განაახლე `/etc/systemd/system/ies_shakemap_main.service`  
-(Template იხილე `create_service.txt` ფაილში)
+შექმენი/განაახლე `/etc/systemd/system/ies_shakemap_main.service`
+(Template: `ies_monitoring_main.service`, ახსნა: `conf_gunicorn.txt`)
+
+ყურადღება: template-ში ამჟამად ორი `ExecStart=` წერია (Celery + Gunicorn) `Type=simple`-ით —
+systemd ასეთ unit-ს არ ტვირთავს. Main unit-ში დატოვე მხოლოდ Gunicorn-ის `ExecStart`;
+Celery ცალკე unit-შია (ნაბიჯი 6).
 
 შემდეგ:
 - `sudo systemctl daemon-reload`
@@ -132,13 +170,13 @@ Swagger-ში ორივე security სქემა აღწერილი
 
 ### 5) სერვისის ლოგების მონიტორინგი
 - `journalctl -u ies_shakemap_main -f`
-- პროექტის ლოგები: `logs/*.log`
+- პროექტის ლოგები: `logs/*.log` (events, filters, auth, shakemap, run_shakemap, requests)
 
-თუ ნახავ `Missing command: conda`/`sm_create`/`shake`, ნიშნავს service გარემოში PATH/conda არასწორია და უნდა გასწორდეს service `Environment` ნაწილში.
+თუ ნახავ `Missing command: conda`/`sm_create`/`shake`, ნიშნავს worker-ის გარემოში PATH/conda არასწორია.
 
 ### 6) Celery worker-ის გაშვება (აუცილებელია ShakeMap რიგისთვის)
-შექმენი/განაახლე `/etc/systemd/system/ies_shakemap_celery.service`  
-(Template იხილე `ies_monitoring_celery.service` ფაილში)
+შექმენი/განაახლე `/etc/systemd/system/ies_shakemap_celery.service`
+(Template: `ies_monitoring_celery.service`, ახსნა: `conf_celery.txt`)
 
 შემდეგ:
 - `sudo systemctl daemon-reload`
@@ -146,34 +184,41 @@ Swagger-ში ორივე security სქემა აღწერილი
 - `sudo systemctl restart ies_shakemap_celery`
 - `sudo systemctl status ies_shakemap_celery`
 
+Worker-ს `--concurrency` არ გადასცე (ან გადაეცი 1) — კოდი ერთდროულად ერთ ShakeMap-ზეა გათვლილი.
+
 ### 7) Celery ლოგების მონიტორინგი
 - `journalctl -u ies_shakemap_celery -f`
+- `logs/shakemap.log`, `logs/run_shakemap.log`
 
 ### 8) Celery სწრაფი შემოწმება
 - `python -c "from src.celery_app import celery; print(celery.broker_connection().as_uri())"`
-- status endpoint/UI-დან შეამოწმე, რომ ახალი ShakeMap მოთხოვნა გადადის `waiting -> running -> generated/failed`.
+- ივენთის დეტალურ გვერდზე (ან `GET /api/shakemap/<oid>`) შეამოწმე, რომ ახალი ShakeMap მოთხოვნა გადადის `waiting -> running -> generated/failed`.
 
 ---
 
 ## ძირითადი სამუშაო სცენარები
 
 ### 1) ივენთის დამატება
-1. გადადი `/events`
-2. შეავსე ფორმა (Origin Time მიიღებს ISO ფორმატს, მაგალითად `2024-07-22T08:08:09.660000`)
-3. გაგზავნისას გამოიყენება `POST /api/events` + `X-API-Key`
+1. გადადი `/events` (საჭიროა login + `can_events`)
+2. დააჭირე „Add Earthquake“ და შეავსე ფორმა (Origin Time — ISO ფორმატი, მაგ. `2024-07-22T08:08:09.660000`)
+3. გაგზავნისას გამოიყენება `POST /api/events` + JWT
+   (ინტეგრაციები/SeisComP იგივე endpoint-ს `X-API-Key`-ით იძახებენ)
 
 ### 2) ShakeMap გენერაცია
-1. გადადი `/shakemap`
-2. ივენთთან დააჭირე regenerate აიქონს
+1. `/events` სიიდან გახსენი ივენთი → `/events/<seiscomp_oid>`
+2. დააჭირე „Generate ShakeMap“ (საჭიროა `can_shakemap`)
 3. სისტემა გაუშვებს `POST /api/shakemap`
-4. წარმატებისას სტატუსი განახლდება
+4. გვერდი თავად ამოწმებს სტატუსს, სანამ job `waiting`/`running`-ია
 
-### 3) Gallery ნახვა
-1. `/shakemap` გვერდზე დააჭირე gallery აიქონს
-2. იხსნება modal სურათებით
-3. სურათზე click -> სრულ ზომაზე ახალ tab-ში
+### 3) სურათები და რუკა
+1. იმავე `/events/<seiscomp_oid>` გვერდზე აირჩიე სურათის ტიპი (Intensity, PGA, PGV, PSA)
+2. რუკის tab-ზე ჩანს ShakeMap ფენები, სადგურები და legend
 
-### 4) პაროლის შეცვლა
+### 4) Publish WordPress-ზე
+1. `/events/<seiscomp_oid>` გვერდზე publish toggle (საჭიროა `can_events`)
+2. იძახებს `POST /api/publish_event` ან `POST /api/unpublish_event`
+
+### 5) პაროლის შეცვლა
 - შიგნიდან: `/change_password` (ძველი პაროლის გადამოწმებით)
 - მეილიდან: `/reset_password/<token>` (token reset flow)
 
@@ -182,12 +227,13 @@ Swagger-ში ორივე security სქემა აღწერილი
 ## Deployment მოკლედ
 - რეკომენდებული გაშვება: `systemd + gunicorn + nginx`
 - ShakeMap დათვლა უნდა მუშაობდეს იმავე სერვერზე, სადაც conda/shakemap გარემოა გამართული
-- Docker ფაილები პროექტში არსებობს, მაგრამ production-ში გამოიყენე მხოლოდ მაშინ, როცა გარემოს ცვლადები/volume/PATH სწორადაა დაგეგმილი
+- Docker ფაილები repository-ში არ არის
 
 ---
 
 ## შენიშვნა
 თუ API-ში ან Front-ში endpoint შეიცვალა, აუცილებელია:
-1) შესაბამის JS გამოძახებების განახლება  
-2) Swagger დოკის სინქრონიზაცია  
-3) ავტორიზაციის ტიპის (API key vs JWT) შესაბამისობის შემოწმება.
+1) შესაბამისი JS გამოძახებების განახლება
+2) Swagger დოკის სინქრონიზაცია
+3) ავტორიზაციის ტიპის (API key vs JWT) შესაბამისობის შემოწმება
+4) `README.md` API ცხრილის და `docs/`-ის განახლება
